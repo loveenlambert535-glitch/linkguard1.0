@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LinkGuard — Vérificateur de liens & fichiers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #07091a;
+  --s1: rgba(255,255,255,0.05);
+  --s2: rgba(255,255,255,0.03);
+  --s3: rgba(255,255,255,0.08);
+  --accent: #00d4aa;
+  --accent2: #7c3aed;
+  --safe: #00e676;
+  --safe-dim: rgba(0,230,118,.13);
+  --warn: #ffb300;
+  --warn-dim: rgba(255,179,0,.13);
+  --danger: #ff1744;
+  --danger-dim: rgba(255,23,68,.13);
+  --text: #e8edf5;
+  --muted: #4a5a7a;
+  --border: rgba(255,255,255,0.09);
+  --radius: 18px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body {
+  font-family:'Space Grotesk',system-ui,sans-serif;
+  background:var(--bg); color:var(--text);
+  min-height:100vh; overflow-x:hidden;
+  padding:clamp(24px,6vw,48px) clamp(16px,4vw,24px);
+  padding-top:calc(env(safe-area-inset-top,0px) + clamp(24px,6vw,48px));
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 48px);
+  position:relative;
+}
+body::before {
+  content:''; position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 10%, rgba(0,212,170,.18) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 80% 80%, rgba(124,58,237,.18) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 60% 20%, rgba(0,212,170,.07) 0%, transparent 50%);
+  animation:bgshift 12s ease-in-out infinite alternate;
+  pointer-events:none; z-index:0;
+}
+@keyframes bgshift{0%{opacity:1;transform:scale(1) rotate(0)}100%{opacity:.7;transform:scale(1.08) rotate(2deg)}}
+body::after {
+  content:''; position:fixed; inset:0;
+  background-image:linear-gradient(rgba(0,212,170,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,170,.04) 1px,transparent 1px);
+  background-size:40px 40px; pointer-events:none; z-index:0;
+}
+.wrap{max-width:620px;margin:0 auto;position:relative;z-index:1}
+
+/* Header */
+.header{text-align:center;margin-bottom:36px}
+.shield-wrap {
+  display:inline-flex;align-items:center;justify-content:center;
+  width:72px;height:72px;border-radius:20px;
+  background:linear-gradient(135deg,rgba(0,212,170,.2),rgba(124,58,237,.2));
+  border:1px solid rgba(0,212,170,.3);
+  font-size:36px;margin-bottom:16px;
+  box-shadow:0 0 40px rgba(0,212,170,.2),0 0 80px rgba(0,212,170,.08);
+  animation:shieldpulse 3s ease-in-out infinite;
+}
+@keyframes shieldpulse{0%,100%{box-shadow:0 0 30px rgba(0,212,170,.2),0 0 60px rgba(0,212,170,.08)}50%{box-shadow:0 0 50px rgba(0,212,170,.35),0 0 100px rgba(0,212,170,.15)}}
+h1{font-size:clamp(28px,6vw,36px);font-weight:700;letter-spacing:-1px;background:linear-gradient(135deg,#00d4aa 0%,#7c3aed 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
+.tagline{font-size:14px;color:var(--muted)}
+
+/* Glass */
+.glass{background:var(--s1);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--border);border-radius:var(--radius)}
+
+/* Scan box */
+.scan-box{padding:22px;margin-bottom:20px}
+
+/* Tabs */
+.tabs{display:flex;gap:6px;margin-bottom:18px;background:rgba(255,255,255,.04);border-radius:11px;padding:4px}
+.tab-btn{
+  flex:1;padding:9px 16px;border:none;border-radius:8px;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;
+  background:transparent;color:var(--muted);transition:all .2s;
+}
+.tab-btn.active{background:linear-gradient(135deg,rgba(0,212,170,.2),rgba(124,58,237,.15));color:var(--accent);box-shadow:0 2px 12px rgba(0,212,170,.15)}
+.tab-btn:hover:not(.active){color:var(--text);background:rgba(255,255,255,.04)}
+
+/* URL panel */
+.panel{display:none}.panel.active{display:block}
+.input-row{display:flex;gap:10px;margin-bottom:16px}
+input[type=text]{
+  flex:1;min-width:0;
+  background:rgba(255,255,255,.04);border:1.5px solid var(--border);
+  border-radius:11px;padding:13px 16px;color:var(--text);
+  font-family:'JetBrains Mono',monospace;font-size:13px;outline:none;
+  transition:border-color .25s,box-shadow .25s;
+}
+input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,212,170,.12),0 0 20px rgba(0,212,170,.08)}
+input[type=text]::placeholder{color:var(--muted);font-family:'Space Grotesk',sans-serif}
+
+.btn{
+  position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#00d4aa,#00b894);
+  color:#07091a;border:none;border-radius:11px;padding:13px 20px;
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  cursor:pointer;white-space:nowrap;
+  transition:transform .15s,box-shadow .2s,opacity .15s;
+  box-shadow:0 4px 20px rgba(0,212,170,.35);
+}
+.btn::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.25) 0%,transparent 60%);opacity:0;transition:opacity .2s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(0,212,170,.5)}
+.btn:hover::after{opacity:1}
+.btn:active{transform:translateY(0) scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn::before{content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);transform:skewX(-20deg);animation:shimmer 3s ease-in-out infinite 1s}
+@keyframes shimmer{0%,100%{left:-100%}50%{left:150%}}
+
+.chip-row{display:flex;flex-wrap:wrap;gap:7px}
+.chip-label{font-size:11px;color:var(--muted);width:100%;margin-bottom:2px;font-weight:600}
+.chip{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:20px;padding:5px 13px;font-size:12px;color:var(--muted);cursor:pointer;transition:all .15s}
+.chip:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,212,170,.08)}
+
+/* Drop zone */
+.drop-zone{
+  border:2px dashed var(--border);border-radius:14px;
+  padding:40px 20px;text-align:center;cursor:pointer;
+  transition:all .25s;position:relative;overflow:hidden;
+  background:rgba(255,255,255,.02);
+}
+.drop-zone:hover,.drop-zone.dragover{
+  border-color:var(--accent);
+  background:rgba(0,212,170,.06);
+  box-shadow:0 0 30px rgba(0,212,170,.1) inset;
+}
+.drop-zone.dragover .dz-icon{transform:scale(1.15) translateY(-4px)}
+.dz-icon{font-size:44px;display:block;margin-bottom:12px;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.dz-title{font-size:16px;font-weight:600;margin-bottom:6px}
+.dz-sub{font-size:12px;color:var(--muted);line-height:1.6}
+.dz-sub span{color:var(--accent);cursor:pointer;text-decoration:underline}
+input[type=file]{display:none}
+
+.dz-formats{
+  display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:16px;
+}
+.dz-tag{
+  background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:6px;padding:3px 9px;font-size:11px;
+  font-family:'JetBrains Mono',monospace;color:var(--muted);
+}
+.dz-tag.red{border-color:rgba(255,23,68,.3);color:var(--danger)}
+.dz-tag.green{border-color:rgba(0,230,118,.3);color:var(--safe)}
+.dz-tag.orange{border-color:rgba(255,179,0,.3);color:var(--warn)}
+
+/* File info bar (shows after file selected) */
+.file-bar{
+  display:none;align-items:center;gap:12px;
+  background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:11px;padding:12px 16px;margin-top:14px;
+}
+.file-bar.show{display:flex}
+.file-emoji{font-size:24px;flex-shrink:0}
+.file-details{flex:1;min-width:0}
+.file-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-meta{font-size:11px;color:var(--muted);margin-top:2px;font-family:'JetBrains Mono',monospace}
+.btn-sm{padding:8px 14px;font-size:13px}
+
+/* Result */
+.result{margin-bottom:20px;display:none;overflow:hidden}
+.result.show{display:block;animation:slideup .4s cubic-bezier(.16,1,.3,1)}
+@keyframes slideup{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+.verdict-hero{padding:28px 24px;display:flex;flex-direction:column;align-items:center;border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+.verdict-hero::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .4s}
+.verdict-hero.glow-safe::before{background:radial-gradient(ellipse 80% 60% at 50% 100%,rgba(0,230,118,.12),transparent);opacity:1}
+.verdict-hero.glow-warn::before{background:radial-gradient(ellipse 80% 60% at 50% 100%,rgba(255,179,0,.12),transparent);opacity:1}
+.verdict-hero.glow-danger::before{background:radial-gradient(ellipse 80% 60% at 50% 100%,rgba(255,23,68,.12),transparent);opacity:1}
+.verdict-icon{font-size:42px;margin-bottom:10px;animation:popin .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes popin{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.verdict-label{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-bottom:10px}
+.v-safe{color:var(--safe)}.v-warn{color:var(--warn)}.v-danger{color:var(--danger)}
+.scanned-url{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);word-break:break-all;text-align:center;max-width:100%;line-height:1.6}
+
+/* File stats row */
+.file-stats{display:flex;gap:0;border-bottom:1px solid var(--border)}
+.stat-cell{flex:1;padding:12px 16px;text-align:center;border-right:1px solid var(--border)}
+.stat-cell:last-child{border-right:none}
+.stat-val{font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text)}
+.stat-key{font-size:10px;color:var(--muted);margin-top:2px;font-weight:600}
+
+.score-row{padding:16px 24px;border-bottom:1px solid var(--border)}
+.score-labels{display:flex;justify-content:space-between;margin-bottom:8px}
+.score-title{font-size:12px;color:var(--muted);font-weight:600}
+.score-num{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--muted)}
+.bar-track{background:rgba(255,255,255,.06);border-radius:6px;height:8px;overflow:hidden}
+.bar-fill{height:100%;border-radius:6px;width:0%;transition:width .8s cubic-bezier(.16,1,.3,1),box-shadow .4s}
+.bar-fill.f-safe{background:linear-gradient(90deg,#00d4aa,#00e676);box-shadow:0 0 10px rgba(0,230,118,.5)}
+.bar-fill.f-warn{background:linear-gradient(90deg,#ff8c00,#ffb300);box-shadow:0 0 10px rgba(255,179,0,.5)}
+.bar-fill.f-danger{background:linear-gradient(90deg,#c62828,#ff1744);box-shadow:0 0 10px rgba(255,23,68,.5)}
+
+.checks{padding:6px 0}
+.check{display:flex;align-items:flex-start;gap:13px;padding:13px 24px;border-bottom:1px solid var(--border);opacity:0;transform:translateX(-8px);animation:checkin .3s forwards}
+@keyframes checkin{to{opacity:1;transform:none}}
+.check:last-child{border-bottom:none}
+.ci{font-size:18px;flex-shrink:0;margin-top:1px}
+.ct{flex:1}
+.cl{font-size:14px;font-weight:600;margin-bottom:3px}
+.cd{font-size:12px;color:var(--muted);line-height:1.55}
+
+/* Code preview */
+.code-preview{
+  border-top:1px solid var(--border);
+  background:rgba(0,0,0,.3);
+  padding:14px 20px;
+}
+.code-head{font-size:11px;color:var(--muted);font-weight:600;margin-bottom:8px}
+.code-block{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:rgba(232,237,245,.7);line-height:1.6;
+  max-height:120px;overflow:auto;
+  white-space:pre-wrap;word-break:break-all;
+}
+.code-block::-webkit-scrollbar{width:4px;height:4px}
+.code-block::-webkit-scrollbar-track{background:transparent}
+.code-block::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+.ai-block{border-top:1px solid var(--border);padding:18px 24px;background:linear-gradient(135deg,rgba(124,58,237,.08),rgba(0,212,170,.05));position:relative;overflow:hidden}
+.ai-block::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(124,58,237,.5),rgba(0,212,170,.5),transparent)}
+.ai-head{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.ai-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.5s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.ai-body{font-size:14px;line-height:1.7;color:var(--text)}
+
+.spin-row{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:18px;height:18px;border-radius:50%;border:2px solid rgba(0,212,170,.2);border-top-color:var(--accent);animation:spin .7s linear infinite;flex-shrink:0}
+
+/* History */
+.history{margin-top:4px}
+.hist-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.hist-title{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.5px}
+.hist-clear{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 11px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.hist-clear:hover{background:rgba(255,23,68,.15);border-color:var(--danger);color:var(--danger)}
+.hist-item{display:flex;align-items:center;gap:10px;background:var(--s1);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:11px;padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,background .15s}
+.hist-item:hover{border-color:var(--accent);background:rgba(0,212,170,.05)}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.d-safe{background:var(--safe);box-shadow:0 0 6px var(--safe)}
+.d-warn{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.d-danger{background:var(--danger);box-shadow:0 0 6px var(--danger)}
+.hist-url{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)}
+.hist-type{font-size:10px;color:var(--muted);background:rgba(255,255,255,.05);padding:2px 7px;border-radius:4px;flex-shrink:0}
+
+.btn-clear{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--border);border-radius:9px;padding:8px 12px;font-size:18px;line-height:1;cursor:pointer;transition:all .15s;flex-shrink:0}
+.btn-clear:hover{background:rgba(255,71,87,.15);border-color:var(--danger);color:var(--danger)}
+.input-wrap{position:relative;flex:1;min-width:0;display:flex}
+.input-wrap input[type=text]{width:100%;padding-inline-end:40px}
+.x-btn{position:absolute;inset-inline-end:8px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;border:none;background:rgba(255,255,255,.1);color:var(--text);font-size:13px;line-height:1;cursor:pointer;display:none;align-items:center;justify-content:center;transition:background .15s,color .15s}
+.x-btn.show{display:flex}
+.x-btn:hover{background:rgba(255,23,68,.25);color:#fff}
+.trust{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:20px auto 0;max-width:560px}
+.trust span{background:rgba(0,230,118,.07);border:1px solid rgba(0,230,118,.22);border-radius:20px;padding:6px 12px;font-size:12px;color:#bff5d6}
+.priv{font-size:12px;color:var(--muted);line-height:1.6;text-align:center;margin:-4px 8px 20px}
+.tip{margin-top:14px;font-size:13.5px;line-height:1.55;text-align:center;max-width:460px;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--border)}
+.hist-item{cursor:pointer}
+.lang-wrap{display:inline-flex;align-items:center;gap:8px;margin-top:16px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:11px;padding:7px 12px}
+.lang-wrap:focus-within{border-color:var(--accent)}
+.lang-wrap select{background:transparent;color:var(--text);border:none;outline:none;font-family:inherit;font-size:13px;width:min(260px,62vw);cursor:pointer}
+.lang-wrap select option,.lang-wrap select optgroup{background:#0d1126;color:#e8edf5}
+.lang-note{font-size:11px;color:var(--muted);margin:10px auto 0;max-width:420px;line-height:1.5}
+.lang-note:empty{display:none}
+input[type=text],.scanned-url,.hist-url,.code-block{direction:ltr;text-align:start}
+[dir=rtl] input[type=text]{text-align:right}
+[dir=rtl] .scanned-url,[dir=rtl] .hist-url,[dir=rtl] .code-block{text-align:left}
+.footer{text-align:center;font-size:12px;color:var(--muted);margin-top:32px;line-height:1.8}
+.footer span{display:inline-block;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:8px 14px}
+.finding{padding:12px 20px;border-top:1px solid var(--border)}
+.f-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:600;margin-bottom:6px}
+.f-ln{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);font-weight:400}
+.f-code{font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;background:rgba(0,0,0,.35);border-radius:8px;padding:8px 10px;margin-bottom:6px;white-space:pre-wrap;word-break:break-all;direction:ltr;text-align:left;max-height:110px;overflow:auto}
+.f-code mark{background:rgba(255,23,68,.4);color:#fff;border-radius:3px;padding:0 2px}
+.f-what{font-size:12.5px;line-height:1.6}.f-what b{color:var(--accent)}
+.glass,.btn,.hist-item{contain:layout paint}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.actions{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:14px 20px;border-top:1px solid var(--border)}
+.actions:empty{display:none}.actions .vt{color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
+.actions .sha{width:100%;font:11px 'JetBrains Mono',monospace;color:var(--muted);word-break:break-all;direction:ltr;text-align:left}
+.db-sec{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;margin:18px 0 8px}
+#dbText{width:100%;min-height:90px;background:rgba(255,255,255,.04);border:1.5px solid var(--border);border-radius:11px;padding:11px 13px;color:var(--text);font:12px 'JetBrains Mono',monospace;resize:vertical;outline:none;direction:ltr;text-align:left}
+#dbText:focus{border-color:var(--accent)}.db-btns{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap}
+#panel-db .file-stats{border:1px solid var(--border);border-radius:11px;overflow:hidden}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="shield-wrap">🛡️</div>
+    <h1>LinkGuard</h1>
+    <p class="tagline" data-i18n="tagline">Vérificateur de liens &amp; fichiers — Analyse heuristique + IA</p>
+    <div class="lang-wrap"><span aria-hidden="true">🌐</span><select id="langSel" aria-label="Language"></select></div>
+    <div class="lang-note" id="langNote"></div>
+    <div class="trust">
+      <span data-i18n="b1">🆓 Gratuit, sans compte</span>
+      <span data-i18n="b2">🔒 Le lien n'est jamais ouvert</span>
+      <span data-i18n="b3">📂 Fichiers lus sur ton appareil</span>
+      <span data-i18n="b4">🧹 Historique effacé à la fermeture</span>
+    </div>
+  </div>
+
+  <div class="glass scan-box">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-url" data-i18n="tabUrl" onclick="switchTab('url')">🔗 Lien URL</button>
+      <button class="tab-btn" id="tab-file" data-i18n="tabFile" onclick="switchTab('file')">📁 Fichier</button>
+      <button class="tab-btn" id="tab-db" data-i18n="tabDb" onclick="switchTab('db')">🗄️ Base</button>
+    </div>
+
+    <!-- URL panel -->
+    <div class="panel active" id="panel-url">
+      <div class="input-row">
+        <div class="input-wrap">
+          <input type="text" id="urlInput" placeholder="Colle un lien ici…" data-i18n-ph="ph" autocomplete="off" autocorrect="off" spellcheck="false"/>
+          <button type="button" class="x-btn" id="clearUrl" onclick="clearUrl()" data-i18n-title="clr" title="Effacer" aria-label="Effacer">✕</button>
+        </div>
+        <button class="btn" id="scanBtn" data-i18n="scan" onclick="scanUrl()">🔍 Scanner</button>
+      </div>
+      <div class="chip-row">
+        <span class="chip-label" data-i18n="quick">EXEMPLES RAPIDES</span>
+        <span class="chip" onclick="ex('https://google.com')">✅ google.com</span>
+        <span class="chip" data-i18n="exIp" onclick="ex('http://192.168.1.1/login-verify')">🚨 IP directe</span>
+        <span class="chip" data-i18n="exPhish" onclick="ex('http://paypa1-secure.tk/account/confirm')">🚨 Phishing</span>
+        <span class="chip" data-i18n="exShort" onclick="ex('https://bit.ly/3xAb2cD')">⚠️ Lien court</span>
+        <span class="chip" data-i18n="exExe" onclick="ex('https://cdn.download.site/setup.exe')">🚨 .exe</span>
+      </div>
+    </div>
+
+    <!-- File panel -->
+    <div class="panel" id="panel-file">
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <span class="dz-icon">📂</span>
+        <div class="dz-title" data-i18n="dzTitle">Glisse un fichier ici</div>
+        <div class="dz-sub" data-i18n-html="dzSub">ou <span>clique pour sélectionner</span> un fichier depuis ton appareil</div>
+        <div class="dz-formats">
+          <span class="dz-tag red">.exe</span>
+          <span class="dz-tag red">.bat</span>
+          <span class="dz-tag red">.ps1</span>
+          <span class="dz-tag red">.vbs</span>
+          <span class="dz-tag orange">.zip</span>
+          <span class="dz-tag orange">.apk</span>
+          <span class="dz-tag green">.txt</span>
+          <span class="dz-tag green">.pdf</span>
+          <span class="dz-tag green">.js</span>
+          <span class="dz-tag green">.py</span>
+          <span class="dz-tag green" data-i18n="more">et plus…</span>
+        </div>
+      </div>
+      <input type="file" id="fileInput" onchange="onFileSelect(event)">
+
+      <div class="file-bar" id="fileBar">
+        <div class="file-emoji" id="fileEmoji">📄</div>
+        <div class="file-details">
+          <div class="file-name" id="fileName">—</div>
+          <div class="file-meta" id="fileMeta">—</div>
+        </div>
+        <button class="btn btn-sm" id="scanFileBtn" data-i18n="analyze" onclick="scanFile()">🔍 Analyser</button>
+        <button class="btn-clear" onclick="clearFile()" title="Supprimer le fichier" data-i18n-title="rm">✕</button>
+      </div>
+    </div>
+    <div class="panel" id="panel-db">
+      <div class="file-stats" id="dbStats"></div>
+      <div class="db-sec" data-i18n="dbVir">🦠 MENACES DÉTECTÉES</div><div id="dbVir"></div>
+      <div class="db-sec" data-i18n="dbSites">🌐 SITES DÉTECTÉS</div><div id="dbSites"></div>
+      <div class="db-sec" data-i18n="dbSig">📚 SIGNATURES INTÉGRÉES</div><div class="cd" id="dbSig"></div>
+      <div class="db-sec" data-i18n="dbIO">📥 IMPORT / EXPORT</div>
+      <textarea id="dbText" data-i18n-ph="dbPh" spellcheck="false"></textarea>
+      <div class="db-btns"><button class="btn btn-sm" data-i18n="dbExp" onclick="dbExport()">📤 Exporter</button><button class="btn btn-sm" data-i18n="dbImp" onclick="dbImport()">📥 Importer</button><button class="hist-clear" data-i18n="dbClr" onclick="dbClear(this)">🗑️ Vider</button></div>
+      <div class="cd" id="dbMsg"></div>
+    </div>
+  </div>
+
+  <p class="priv" data-i18n="priv"></p>
+
+  <!-- Result -->
+  <div class="glass result" id="result">
+    <div class="verdict-hero" id="verdictHero">
+      <div class="verdict-icon" id="verdictIcon">—</div>
+      <div class="verdict-label" id="verdictLabel">—</div>
+      <div class="scanned-url" id="scannedUrl"></div>
+      <div class="tip" id="verdictTip"></div>
+    </div>
+    <div id="fileStatsRow"></div>
+    <div class="score-row">
+      <div class="score-labels">
+        <span class="score-title" data-i18n="risk">Niveau de risque</span>
+        <span class="score-num" id="scoreNum">0 / 100</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+    </div>
+    <div class="checks" id="checks"></div>
+    <div id="codePreviewBlock"></div>
+    <div class="actions" id="actionsRow"></div>
+    <div class="ai-block">
+      <div class="ai-head"><div class="ai-dot"></div><span data-i18n="ai">Analyse IA — Claude</span></div>
+      <div class="ai-body" id="aiBody"><div class="spin-row"><div class="spinner"></div>Analyse en cours…</div></div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history" id="histSection" style="display:none">
+    <div class="hist-head"><div class="hist-title" data-i18n="hist">HISTORIQUE</div><button type="button" class="hist-clear" data-i18n="histClr" onclick="clearHistory()">🗑️ Tout effacer</button></div>
+    <div id="histList"></div>
+  </div>
+
+  <div class="footer">
+    <span data-i18n-html="foot">⚠️ Outil d'aide à la décision — pas infaillible.<br>Ne clique et n'exécute jamais un fichier douteux même si l'outil affiche « Sûr ».</span>
+  </div>
+
+</div>
+<script>
+/* ═══════════════ STATE ═══════════════ */
+const hist = [];
+let currentFile = null;
+let currentFileContent = null;
+
+/* ═══════════════ TABS ═══════════════ */
+function switchTab(tab) {
+  if (tab === 'db') renderDb();
+  ['url','file','db'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('panel-'+t).classList.toggle('active', t===tab);
+  });
+}
+
+/* ═══════════════ URL HELPERS ═══════════════ */
+function ex(url) { document.getElementById('urlInput').value = url; updateClearBtn(); scanUrl(); }
+
+/* ═══════════════ FILE DROP ═══════════════ */
+function onDragOver(e) { e.preventDefault(); document.getElementById('dropZone').classList.add('dragover'); }
+function onDragLeave(e) { document.getElementById('dropZone').classList.remove('dragover'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+}
+function onFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) loadFile(file);
+}
+
+function fileEmoji(name, mime) {
+  const ext = name.split('.').pop().toLowerCase();
+  const execs = ['exe','bat','vbs','ps1','cmd','msi','scr','jar','hta'];
+  const archives = ['zip','rar','7z','tar','gz','apk'];
+  const docs = ['pdf','doc','docx','odt'];
+  const images = ['jpg','jpeg','png','gif','svg','webp'];
+  const code = ['js','ts','py','php','html','css','sh','rb'];
+  if (execs.includes(ext)) return '⚠️';
+  if (archives.includes(ext)) return '📦';
+  if (docs.includes(ext)) return '📄';
+  if (images.includes(ext)) return '🖼️';
+  if (code.includes(ext)) return '📝';
+  return '📁';
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1048576).toFixed(1) + ' MB';
+}
+
+function clearFile() {
+  currentFile = null;
+  currentFileContent = null; lastDeep = null;
+  document.getElementById('fileInput').value = '';
+  document.getElementById('fileBar').classList.remove('show');
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('dropZone').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function loadFile(file) {
+  currentFile = file;
+  currentFileContent = null; lastDeep = null;
+  document.getElementById('fileBar').classList.add('show');
+  document.getElementById('fileEmoji').textContent = fileEmoji(file.name, file.type);
+  document.getElementById('fileName').textContent = file.name;
+  renderFileMeta();
+
+  // Try to read text content (up to 60KB)
+  const textExts = ['txt','js','ts','py','html','css','sh','bat','ps1','vbs','cmd','php','rb','json','xml','csv','log','md','ini','cfg'];
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (textExts.includes(ext) || file.type.startsWith('text/')) {
+    const slice = file.slice(0, 61440); // 60KB
+    const reader = new FileReader();
+    reader.onload = e => { currentFileContent = e.target.result; };
+    reader.readAsText(slice);
+  }
+}
+
+function renderFileMeta() {
+  if (!currentFile) return;
+  let d;
+  try { d = new Date(currentFile.lastModified).toLocaleDateString(LANG); }
+  catch(e) { d = new Date(currentFile.lastModified).toLocaleDateString(); }
+  document.getElementById('fileMeta').textContent =
+    formatBytes(currentFile.size) + ' · ' + (currentFile.type || tr('unk')) + ' · ' + tr('mod') + ' : ' + d;
+}
+
+/* ═══════════════ I18N ═══════════════ */
+/* Interface complètement traduite dans les langues ci-dessous.
+   Toutes les autres langues du sélecteur affichent l'interface en anglais,
+   mais l'analyse IA répond dans la langue choisie. */
+const T = {
+
+fr: {
+title:`LinkGuard — Vérificateur de liens & fichiers`,
+tagline:`Vérificateur de liens & fichiers — Analyse heuristique + IA`,
+tabUrl:`🔗 Lien URL`, tabFile:`📁 Fichier`, ph:`Colle un lien ici…`, scan:`🔍 Scanner`,
+quick:`EXEMPLES RAPIDES`, exIp:`🚨 IP directe`, exPhish:`🚨 Phishing`, exShort:`⚠️ Lien court`, exExe:`🚨 .exe`,
+dzTitle:`Glisse un fichier ici`, dzSub:`ou <span>clique pour sélectionner</span> un fichier depuis ton appareil`,
+more:`et plus…`, analyze:`🔍 Analyser`, rm:`Supprimer le fichier`, risk:`Niveau de risque`,
+ai:`Analyse IA — Claude`, aiLoad:`Analyse IA en cours…`, aiNo:`Analyse IA indisponible.`, hist:`HISTORIQUE`,
+foot:`⚠️ Outil d'aide à la décision — pas infaillible.<br>Ne clique et n'exécute jamais un fichier douteux même si l'outil affiche « Sûr ».`,
+safe:`Probablement sûr`, warn:`Suspect`, danger:`Dangereux`, tURL:`🔗 URL`, tFile:`📁 Fichier`,
+ext:`Extension`, size:`Taille`, read:`Contenu lu`, yes:`Oui`, no:`Non`, prev:`APERÇU DU CONTENU`, unk:`type inconnu`, mod:`Modifié`,
+lang:`Langue`, partial:``,
+clr:`Effacer`, b1:`🆓 Gratuit, sans compte`, b2:`🔒 Le lien n'est jamais ouvert`, b3:`📂 Fichiers lus sur ton appareil`, b4:`🧹 Historique effacé à la fermeture`,
+priv:`Seuls l'adresse du lien — ou le nom d'un fichier et un court extrait s'il est en texte — sont transmis à l'IA pour avoir son avis. Ce site n'enregistre rien.`,
+tipsafe:`✨ Bonne nouvelle : aucun signal d'alerte. Reste quand même attentif, aucun outil n'est parfait.`, tipwarn:`🙂 Pas d'inquiétude : il y a juste quelques points à vérifier. En cas de doute, n'ouvre pas.`, tipdanger:`💚 Pas de panique : le scan n'a rien ouvert ni installé. Il suffit de ne pas cliquer dessus et de le supprimer.`,
+histClr:`🗑️ Tout effacer`,
+uInv:[`URL invalide`,`Format non reconnu.`],
+uHttp:[`Pas de HTTPS`,`Connexion non chiffrée.`],
+uHttps:[`HTTPS activé`,`La connexion est chiffrée.`],
+uIp:[`Adresse IP brute`,`Les sites légitimes utilisent des noms de domaine.`],
+uTld:[`TLD suspect ({0})`,`Très souvent associé à des arnaques.`],
+uShort:[`Lien raccourci`,`Destination masquée.`],
+uKw2:[`Mots-clés de phishing`,`Contient « {0} » — hameçonnage.`],
+uKw1:[`Mot-clé sensible`,`Contient « {0} » — vérifiez le domaine.`],
+uAt:[`@ dans l'URL`,`Technique de masquage. Très suspect.`],
+uSub:[`Trop de sous-domaines`,`{0} sous-domaines détectés.`],
+uLong:[`URL très longue`,`{0} caractères.`],
+uExe:[`Fichier exécutable`,`Ce lien télécharge du code exécutable.`],
+uPuny:[`Domaine Punycode`,`Peut imiter visuellement un domaine légitime.`],
+uTrust:[`Domaine majeur reconnu`,`Parmi les sites les plus connus.`],
+uNone:[`Aucune anomalie détectée`,`Les vérifications n'ont rien trouvé de suspect.`],
+fDanger:[`Extension dangereuse (.{0})`,`Ce type de fichier peut exécuter du code malveillant sur votre machine.`],
+fHigh:[`Extension à risque (.{0})`,`Ce type de fichier peut contenir des exécutables ou du code masqué.`],
+fScript:[`Script (.{0})`,`Les scripts peuvent exécuter des commandes système s'ils sont lancés.`],
+fCommon:[`Extension courante (.{0})`,`Ce type de fichier est généralement sans danger.`],
+fUnk:[`Extension inconnue (.{0})`,`Extension non reconnue — soyez prudent.`],
+fDbl:[`Double extension piège`,`Fichier nommé « *.{0}.{1} » — technique classique pour tromper l'utilisateur.`],
+fTiny:[`Exécutable très petit`,`{0} — les malwares sont souvent minuscules (dropper/loader).`],
+fBig:[`Fichier très volumineux`,`{0} — inhabituel pour un exécutable.`],
+fSize:[`Taille du fichier`,`{0}`],
+fName:[`Nom suspect`,`Contient « {0} » — terme souvent utilisé dans les fichiers piégés.`],
+fMime:[`Type MIME ≠ extension`,`Le navigateur annonce « {0} » mais l'extension est .{1} — possible déguisement.`],
+pIex:[`Exécution PowerShell`,`Commande PowerShell d'exécution distante détectée (IEX).`],
+pDl:[`Téléchargement de code`,`Tentative de téléchargement de code depuis internet.`],
+pB64:[`Encodage Base64`,`Contenu encodé en Base64 — peut masquer du code malveillant.`],
+pEval:[`eval() détecté`,`Exécution dynamique de code — risque d'obfuscation.`],
+pShell:[`Références shell Windows`,`Appels à des interpréteurs Windows détectés.`],
+pDest:[`Commandes destructives`,`Commandes de suppression ou formatage de disque.`],
+pUnc:[`Chemin réseau (UNC)`,`Chemin réseau distant détecté dans le contenu.`],
+fOk:[`Contenu analysé`,`Aucun pattern malveillant évident dans le contenu lisible.`],
+fLong:[`Chaînes longues suspectes`,`{0} chaînes de plus de 200 caractères détectées — possible obfuscation.`]
+},
+
+en: {
+title:`LinkGuard — Link & file checker`,
+tagline:`Link & file checker — Heuristic analysis + AI`,
+tabUrl:`🔗 URL link`, tabFile:`📁 File`, ph:`Paste a link here…`, scan:`🔍 Scan`,
+quick:`QUICK EXAMPLES`, exIp:`🚨 Raw IP`, exPhish:`🚨 Phishing`, exShort:`⚠️ Short link`, exExe:`🚨 .exe`,
+dzTitle:`Drop a file here`, dzSub:`or <span>click to select</span> a file from your device`,
+more:`and more…`, analyze:`🔍 Analyze`, rm:`Remove file`, risk:`Risk level`,
+ai:`AI analysis — Claude`, aiLoad:`AI analysis in progress…`, aiNo:`AI analysis unavailable.`, hist:`HISTORY`,
+foot:`⚠️ Decision-support tool — not infallible.<br>Never click or run a doubtful file, even if the tool says “Safe”.`,
+safe:`Probably safe`, warn:`Suspicious`, danger:`Dangerous`, tURL:`🔗 URL`, tFile:`📁 File`,
+ext:`Extension`, size:`Size`, read:`Content read`, yes:`Yes`, no:`No`, prev:`CONTENT PREVIEW`, unk:`unknown type`, mod:`Modified`,
+lang:`Language`, partial:`This language isn't translated in the interface yet — shown in English. The AI analysis will still answer in your language.`,
+clr:`Clear`, b1:`🆓 Free, no account`, b2:`🔒 The link is never opened`, b3:`📂 Files read on your device`, b4:`🧹 History cleared when you close the page`,
+priv:`Only the link address — or a file's name and a short excerpt if it's text — is sent to the AI for its opinion. This site stores nothing.`,
+tipsafe:`✨ Good news: no warning signs. Stay alert anyway — no tool is perfect.`, tipwarn:`🙂 No worries: just a few things to double-check. If in doubt, don't open it.`, tipdanger:`💚 Don't panic: scanning opened and installed nothing. Just don't click it, and delete it.`,
+histClr:`🗑️ Clear all`,
+uInv:[`Invalid URL`,`Format not recognized.`],
+uHttp:[`No HTTPS`,`Unencrypted connection.`],
+uHttps:[`HTTPS enabled`,`The connection is encrypted.`],
+uIp:[`Raw IP address`,`Legitimate sites use domain names.`],
+uTld:[`Suspicious TLD ({0})`,`Very often associated with scams.`],
+uShort:[`Shortened link`,`Destination is hidden.`],
+uKw2:[`Phishing keywords`,`Contains “{0}” — phishing.`],
+uKw1:[`Sensitive keyword`,`Contains “{0}” — check the domain.`],
+uAt:[`@ in the URL`,`Masking technique. Very suspicious.`],
+uSub:[`Too many subdomains`,`{0} subdomains detected.`],
+uLong:[`Very long URL`,`{0} characters.`],
+uExe:[`Executable file`,`This link downloads executable code.`],
+uPuny:[`Punycode domain`,`May visually imitate a legitimate domain.`],
+uTrust:[`Well-known major domain`,`Among the best-known websites.`],
+uNone:[`No anomaly detected`,`The checks found nothing suspicious.`],
+fDanger:[`Dangerous extension (.{0})`,`This file type can run malicious code on your machine.`],
+fHigh:[`Risky extension (.{0})`,`This file type may contain executables or hidden code.`],
+fScript:[`Script (.{0})`,`Scripts can run system commands if launched.`],
+fCommon:[`Common extension (.{0})`,`This file type is generally harmless.`],
+fUnk:[`Unknown extension (.{0})`,`Unrecognized extension — be careful.`],
+fDbl:[`Double-extension trap`,`File named “*.{0}.{1}” — a classic trick to fool users.`],
+fTiny:[`Very small executable`,`{0} — malware is often tiny (dropper/loader).`],
+fBig:[`Very large file`,`{0} — unusual for an executable.`],
+fSize:[`File size`,`{0}`],
+fName:[`Suspicious name`,`Contains “{0}” — a term often used in booby-trapped files.`],
+fMime:[`MIME type ≠ extension`,`The browser reports “{0}” but the extension is .{1} — possible disguise.`],
+pIex:[`PowerShell execution`,`Remote-execution PowerShell command detected (IEX).`],
+pDl:[`Code download`,`Attempt to download code from the internet.`],
+pB64:[`Base64 encoding`,`Base64-encoded content — can hide malicious code.`],
+pEval:[`eval() detected`,`Dynamic code execution — obfuscation risk.`],
+pShell:[`Windows shell references`,`Calls to Windows interpreters detected.`],
+pDest:[`Destructive commands`,`Commands that delete files or format a disk.`],
+pUnc:[`Network path (UNC)`,`Remote network path detected in the content.`],
+fOk:[`Content analyzed`,`No obvious malicious pattern in the readable content.`],
+fLong:[`Suspicious long strings`,`{0} strings over 200 characters detected — possible obfuscation.`]
+},
+
+es: {
+title:`LinkGuard — Verificador de enlaces y archivos`,
+tagline:`Verificador de enlaces y archivos — Análisis heurístico + IA`,
+tabUrl:`🔗 Enlace URL`, tabFile:`📁 Archivo`, ph:`Pega un enlace aquí…`, scan:`🔍 Analizar`,
+quick:`EJEMPLOS RÁPIDOS`, exIp:`🚨 IP directa`, exPhish:`🚨 Phishing`, exShort:`⚠️ Enlace corto`, exExe:`🚨 .exe`,
+dzTitle:`Arrastra un archivo aquí`, dzSub:`o <span>haz clic para seleccionar</span> un archivo de tu dispositivo`,
+more:`y más…`, analyze:`🔍 Analizar`, rm:`Quitar el archivo`, risk:`Nivel de riesgo`,
+ai:`Análisis IA — Claude`, aiLoad:`Análisis IA en curso…`, aiNo:`Análisis IA no disponible.`, hist:`HISTORIAL`,
+foot:`⚠️ Herramienta de ayuda a la decisión — no es infalible.<br>Nunca hagas clic ni ejecutes un archivo dudoso, aunque la herramienta indique «Seguro».`,
+safe:`Probablemente seguro`, warn:`Sospechoso`, danger:`Peligroso`, tURL:`🔗 URL`, tFile:`📁 Archivo`,
+ext:`Extensión`, size:`Tamaño`, read:`Contenido leído`, yes:`Sí`, no:`No`, prev:`VISTA PREVIA DEL CONTENIDO`, unk:`tipo desconocido`, mod:`Modificado`,
+lang:`Idioma`, partial:``,
+clr:`Borrar`, b1:`🆓 Gratis, sin cuenta`, b2:`🔒 El enlace nunca se abre`, b3:`📂 Archivos leídos en tu dispositivo`, b4:`🧹 Historial borrado al cerrar la página`,
+priv:`Solo la dirección del enlace — o el nombre de un archivo y un breve extracto si es de texto — se envía a la IA para obtener su opinión. Este sitio no guarda nada.`,
+tipsafe:`✨ Buenas noticias: ninguna señal de alerta. Aun así, mantente atento: ninguna herramienta es perfecta.`, tipwarn:`🙂 Tranquilo: solo hay algunos puntos que revisar. Si tienes dudas, no lo abras.`, tipdanger:`💚 Sin pánico: el análisis no abrió ni instaló nada. Basta con no hacer clic y eliminarlo.`,
+histClr:`🗑️ Borrar todo`,
+uInv:[`URL no válida`,`Formato no reconocido.`],
+uHttp:[`Sin HTTPS`,`Conexión no cifrada.`],
+uHttps:[`HTTPS activado`,`La conexión está cifrada.`],
+uIp:[`Dirección IP directa`,`Los sitios legítimos usan nombres de dominio.`],
+uTld:[`TLD sospechoso ({0})`,`Muy a menudo asociado a estafas.`],
+uShort:[`Enlace acortado`,`Destino oculto.`],
+uKw2:[`Palabras clave de phishing`,`Contiene «{0}» — suplantación de identidad.`],
+uKw1:[`Palabra clave sensible`,`Contiene «{0}» — verifica el dominio.`],
+uAt:[`@ en la URL`,`Técnica de ocultación. Muy sospechoso.`],
+uSub:[`Demasiados subdominios`,`{0} subdominios detectados.`],
+uLong:[`URL muy larga`,`{0} caracteres.`],
+uExe:[`Archivo ejecutable`,`Este enlace descarga código ejecutable.`],
+uPuny:[`Dominio Punycode`,`Puede imitar visualmente un dominio legítimo.`],
+uTrust:[`Dominio importante reconocido`,`Entre los sitios más conocidos.`],
+uNone:[`Ninguna anomalía detectada`,`Las comprobaciones no encontraron nada sospechoso.`],
+fDanger:[`Extensión peligrosa (.{0})`,`Este tipo de archivo puede ejecutar código malicioso en tu equipo.`],
+fHigh:[`Extensión de riesgo (.{0})`,`Este tipo de archivo puede contener ejecutables o código oculto.`],
+fScript:[`Script (.{0})`,`Los scripts pueden ejecutar comandos del sistema si se lanzan.`],
+fCommon:[`Extensión común (.{0})`,`Este tipo de archivo suele ser inofensivo.`],
+fUnk:[`Extensión desconocida (.{0})`,`Extensión no reconocida — ten cuidado.`],
+fDbl:[`Trampa de doble extensión`,`Archivo llamado «*.{0}.{1}» — técnica clásica para engañar al usuario.`],
+fTiny:[`Ejecutable muy pequeño`,`{0} — el malware suele ser diminuto (dropper/loader).`],
+fBig:[`Archivo muy voluminoso`,`{0} — inusual para un ejecutable.`],
+fSize:[`Tamaño del archivo`,`{0}`],
+fName:[`Nombre sospechoso`,`Contiene «{0}» — término muy usado en archivos trampa.`],
+fMime:[`Tipo MIME ≠ extensión`,`El navegador indica «{0}» pero la extensión es .{1} — posible disfraz.`],
+pIex:[`Ejecución de PowerShell`,`Comando de PowerShell de ejecución remota detectado (IEX).`],
+pDl:[`Descarga de código`,`Intento de descargar código desde internet.`],
+pB64:[`Codificación Base64`,`Contenido codificado en Base64 — puede ocultar código malicioso.`],
+pEval:[`eval() detectado`,`Ejecución dinámica de código — riesgo de ofuscación.`],
+pShell:[`Referencias al shell de Windows`,`Llamadas a intérpretes de Windows detectadas.`],
+pDest:[`Comandos destructivos`,`Comandos de borrado o formateo de disco.`],
+pUnc:[`Ruta de red (UNC)`,`Ruta de red remota detectada en el contenido.`],
+fOk:[`Contenido analizado`,`Ningún patrón malicioso evidente en el contenido legible.`],
+fLong:[`Cadenas largas sospechosas`,`{0} cadenas de más de 200 caracteres detectadas — posible ofuscación.`]
+},
+
+pt: {
+title:`LinkGuard — Verificador de links e arquivos`,
+tagline:`Verificador de links e arquivos — Análise heurística + IA`,
+tabUrl:`🔗 Link URL`, tabFile:`📁 Arquivo`, ph:`Cole um link aqui…`, scan:`🔍 Verificar`,
+quick:`EXEMPLOS RÁPIDOS`, exIp:`🚨 IP direto`, exPhish:`🚨 Phishing`, exShort:`⚠️ Link curto`, exExe:`🚨 .exe`,
+dzTitle:`Arraste um arquivo aqui`, dzSub:`ou <span>clique para selecionar</span> um arquivo do seu dispositivo`,
+more:`e mais…`, analyze:`🔍 Analisar`, rm:`Remover o arquivo`, risk:`Nível de risco`,
+ai:`Análise de IA — Claude`, aiLoad:`Análise de IA em andamento…`, aiNo:`Análise de IA indisponível.`, hist:`HISTÓRICO`,
+foot:`⚠️ Ferramenta de apoio à decisão — não é infalível.<br>Nunca clique nem execute um arquivo duvidoso, mesmo que a ferramenta mostre “Seguro”.`,
+safe:`Provavelmente seguro`, warn:`Suspeito`, danger:`Perigoso`, tURL:`🔗 URL`, tFile:`📁 Arquivo`,
+ext:`Extensão`, size:`Tamanho`, read:`Conteúdo lido`, yes:`Sim`, no:`Não`, prev:`PRÉVIA DO CONTEÚDO`, unk:`tipo desconhecido`, mod:`Modificado`,
+lang:`Idioma`, partial:``,
+clr:`Limpar`, b1:`🆓 Grátis, sem conta`, b2:`🔒 O link nunca é aberto`, b3:`📂 Arquivos lidos no seu dispositivo`, b4:`🧹 Histórico apagado ao fechar a página`,
+priv:`Apenas o endereço do link — ou o nome de um arquivo e um pequeno trecho, se for texto — é enviado à IA para dar sua opinião. Este site não guarda nada.`,
+tipsafe:`✨ Boas notícias: nenhum sinal de alerta. Mesmo assim, fique atento — nenhuma ferramenta é perfeita.`, tipwarn:`🙂 Sem preocupação: há só alguns pontos a conferir. Na dúvida, não abra.`, tipdanger:`💚 Sem pânico: a verificação não abriu nem instalou nada. Basta não clicar e apagar.`,
+histClr:`🗑️ Apagar tudo`,
+uInv:[`URL inválida`,`Formato não reconhecido.`],
+uHttp:[`Sem HTTPS`,`Conexão não criptografada.`],
+uHttps:[`HTTPS ativado`,`A conexão é criptografada.`],
+uIp:[`Endereço IP direto`,`Sites legítimos usam nomes de domínio.`],
+uTld:[`TLD suspeito ({0})`,`Muito associado a golpes.`],
+uShort:[`Link encurtado`,`Destino oculto.`],
+uKw2:[`Palavras-chave de phishing`,`Contém “{0}” — phishing.`],
+uKw1:[`Palavra-chave sensível`,`Contém “{0}” — verifique o domínio.`],
+uAt:[`@ na URL`,`Técnica de ocultação. Muito suspeito.`],
+uSub:[`Subdomínios demais`,`{0} subdomínios detectados.`],
+uLong:[`URL muito longa`,`{0} caracteres.`],
+uExe:[`Arquivo executável`,`Este link baixa código executável.`],
+uPuny:[`Domínio Punycode`,`Pode imitar visualmente um domínio legítimo.`],
+uTrust:[`Domínio importante reconhecido`,`Entre os sites mais conhecidos.`],
+uNone:[`Nenhuma anomalia detectada`,`As verificações não encontraram nada suspeito.`],
+fDanger:[`Extensão perigosa (.{0})`,`Este tipo de arquivo pode executar código malicioso no seu computador.`],
+fHigh:[`Extensão de risco (.{0})`,`Este tipo de arquivo pode conter executáveis ou código oculto.`],
+fScript:[`Script (.{0})`,`Scripts podem executar comandos do sistema se forem iniciados.`],
+fCommon:[`Extensão comum (.{0})`,`Este tipo de arquivo geralmente é inofensivo.`],
+fUnk:[`Extensão desconhecida (.{0})`,`Extensão não reconhecida — tenha cuidado.`],
+fDbl:[`Armadilha de dupla extensão`,`Arquivo chamado “*.{0}.{1}” — técnica clássica para enganar o usuário.`],
+fTiny:[`Executável muito pequeno`,`{0} — malwares costumam ser minúsculos (dropper/loader).`],
+fBig:[`Arquivo muito grande`,`{0} — incomum para um executável.`],
+fSize:[`Tamanho do arquivo`,`{0}`],
+fName:[`Nome suspeito`,`Contém “{0}” — termo muito usado em arquivos armadilha.`],
+fMime:[`Tipo MIME ≠ extensão`,`O navegador informa “{0}”, mas a extensão é .{1} — possível disfarce.`],
+pIex:[`Execução de PowerShell`,`Comando PowerShell de execução remota detectado (IEX).`],
+pDl:[`Download de código`,`Tentativa de baixar código da internet.`],
+pB64:[`Codificação Base64`,`Conteúdo codificado em Base64 — pode esconder código malicioso.`],
+pEval:[`eval() detectado`,`Execução dinâmica de código — risco de ofuscação.`],
+pShell:[`Referências ao shell do Windows`,`Chamadas a interpretadores do Windows detectadas.`],
+pDest:[`Comandos destrutivos`,`Comandos de exclusão ou formatação de disco.`],
+pUnc:[`Caminho de rede (UNC)`,`Caminho de rede remoto detectado no conteúdo.`],
+fOk:[`Conteúdo analisado`,`Nenhum padrão malicioso evidente no conteúdo legível.`],
+fLong:[`Cadeias longas suspeitas`,`{0} cadeias com mais de 200 caracteres detectadas — possível ofuscação.`]
+},
+
+de: {
+title:`LinkGuard — Link- & Dateiprüfer`,
+tagline:`Link- & Dateiprüfer — Heuristische Analyse + KI`,
+tabUrl:`🔗 Link (URL)`, tabFile:`📁 Datei`, ph:`Link hier einfügen…`, scan:`🔍 Prüfen`,
+quick:`SCHNELLBEISPIELE`, exIp:`🚨 Direkte IP`, exPhish:`🚨 Phishing`, exShort:`⚠️ Kurzlink`, exExe:`🚨 .exe`,
+dzTitle:`Datei hierher ziehen`, dzSub:`oder <span>zum Auswählen klicken</span> – eine Datei von deinem Gerät`,
+more:`und mehr…`, analyze:`🔍 Analysieren`, rm:`Datei entfernen`, risk:`Risikostufe`,
+ai:`KI-Analyse — Claude`, aiLoad:`KI-Analyse läuft…`, aiNo:`KI-Analyse nicht verfügbar.`, hist:`VERLAUF`,
+foot:`⚠️ Entscheidungshilfe — nicht unfehlbar.<br>Klicke nie auf zweifelhafte Links und führe nie zweifelhafte Dateien aus, auch wenn das Tool „Sicher“ anzeigt.`,
+safe:`Wahrscheinlich sicher`, warn:`Verdächtig`, danger:`Gefährlich`, tURL:`🔗 URL`, tFile:`📁 Datei`,
+ext:`Endung`, size:`Größe`, read:`Inhalt gelesen`, yes:`Ja`, no:`Nein`, prev:`INHALTSVORSCHAU`, unk:`unbekannter Typ`, mod:`Geändert`,
+lang:`Sprache`, partial:``,
+clr:`Löschen`, b1:`🆓 Kostenlos, ohne Konto`, b2:`🔒 Der Link wird nie geöffnet`, b3:`📂 Dateien werden auf deinem Gerät gelesen`, b4:`🧹 Verlauf wird beim Schließen gelöscht`,
+priv:`Nur die Link-Adresse — oder der Name einer Datei und ein kurzer Auszug, falls es Text ist — wird für eine Einschätzung an die KI gesendet. Diese Seite speichert nichts.`,
+tipsafe:`✨ Gute Nachrichten: keine Warnzeichen. Bleib trotzdem aufmerksam — kein Tool ist perfekt.`, tipwarn:`🙂 Keine Sorge: nur ein paar Punkte zum Nachprüfen. Im Zweifel nicht öffnen.`, tipdanger:`💚 Keine Panik: Beim Scan wurde nichts geöffnet oder installiert. Einfach nicht anklicken und löschen.`,
+histClr:`🗑️ Alles löschen`,
+uInv:[`Ungültige URL`,`Format nicht erkannt.`],
+uHttp:[`Kein HTTPS`,`Unverschlüsselte Verbindung.`],
+uHttps:[`HTTPS aktiv`,`Die Verbindung ist verschlüsselt.`],
+uIp:[`Rohe IP-Adresse`,`Seriöse Seiten verwenden Domainnamen.`],
+uTld:[`Verdächtige TLD ({0})`,`Sehr oft mit Betrug verbunden.`],
+uShort:[`Verkürzter Link`,`Das Ziel ist verborgen.`],
+uKw2:[`Phishing-Schlüsselwörter`,`Enthält „{0}“ — Phishing.`],
+uKw1:[`Sensibles Schlüsselwort`,`Enthält „{0}“ — Domain prüfen.`],
+uAt:[`@ in der URL`,`Verschleierungstechnik. Sehr verdächtig.`],
+uSub:[`Zu viele Subdomains`,`{0} Subdomains erkannt.`],
+uLong:[`Sehr lange URL`,`{0} Zeichen.`],
+uExe:[`Ausführbare Datei`,`Dieser Link lädt ausführbaren Code herunter.`],
+uPuny:[`Punycode-Domain`,`Kann optisch eine echte Domain nachahmen.`],
+uTrust:[`Bekannte große Domain`,`Eine der bekanntesten Websites.`],
+uNone:[`Keine Auffälligkeiten`,`Die Prüfungen haben nichts Verdächtiges gefunden.`],
+fDanger:[`Gefährliche Endung (.{0})`,`Dieser Dateityp kann schädlichen Code auf deinem Rechner ausführen.`],
+fHigh:[`Riskante Endung (.{0})`,`Dieser Dateityp kann ausführbare Dateien oder versteckten Code enthalten.`],
+fScript:[`Skript (.{0})`,`Skripte können Systembefehle ausführen, wenn sie gestartet werden.`],
+fCommon:[`Gängige Endung (.{0})`,`Dieser Dateityp ist in der Regel harmlos.`],
+fUnk:[`Unbekannte Endung (.{0})`,`Endung nicht erkannt — Vorsicht.`],
+fDbl:[`Doppelendungs-Falle`,`Datei heißt „*.{0}.{1}“ — ein klassischer Trick, um Nutzer zu täuschen.`],
+fTiny:[`Sehr kleine ausführbare Datei`,`{0} — Schadsoftware ist oft winzig (Dropper/Loader).`],
+fBig:[`Sehr große Datei`,`{0} — ungewöhnlich für eine ausführbare Datei.`],
+fSize:[`Dateigröße`,`{0}`],
+fName:[`Verdächtiger Name`,`Enthält „{0}“ — Begriff, der oft in präparierten Dateien vorkommt.`],
+fMime:[`MIME-Typ ≠ Endung`,`Der Browser meldet „{0}“, die Endung ist aber .{1} — mögliche Tarnung.`],
+pIex:[`PowerShell-Ausführung`,`PowerShell-Befehl zur Remote-Ausführung erkannt (IEX).`],
+pDl:[`Code-Download`,`Versuch, Code aus dem Internet zu laden.`],
+pB64:[`Base64-Kodierung`,`Base64-kodierter Inhalt — kann Schadcode verbergen.`],
+pEval:[`eval() erkannt`,`Dynamische Codeausführung — Verschleierungsrisiko.`],
+pShell:[`Windows-Shell-Verweise`,`Aufrufe von Windows-Interpretern erkannt.`],
+pDest:[`Zerstörerische Befehle`,`Befehle zum Löschen oder Formatieren von Datenträgern.`],
+pUnc:[`Netzwerkpfad (UNC)`,`Entfernter Netzwerkpfad im Inhalt erkannt.`],
+fOk:[`Inhalt analysiert`,`Kein offensichtliches Schadmuster im lesbaren Inhalt.`],
+fLong:[`Verdächtige lange Zeichenfolgen`,`{0} Zeichenfolgen mit über 200 Zeichen erkannt — mögliche Verschleierung.`]
+},
+
+it: {
+title:`LinkGuard — Verifica di link e file`,
+tagline:`Verifica di link e file — Analisi euristica + IA`,
+tabUrl:`🔗 Link URL`, tabFile:`📁 File`, ph:`Incolla un link qui…`, scan:`🔍 Scansiona`,
+quick:`ESEMPI RAPIDI`, exIp:`🚨 IP diretto`, exPhish:`🚨 Phishing`, exShort:`⚠️ Link corto`, exExe:`🚨 .exe`,
+dzTitle:`Trascina un file qui`, dzSub:`oppure <span>clicca per selezionare</span> un file dal tuo dispositivo`,
+more:`e altro…`, analyze:`🔍 Analizza`, rm:`Rimuovi il file`, risk:`Livello di rischio`,
+ai:`Analisi IA — Claude`, aiLoad:`Analisi IA in corso…`, aiNo:`Analisi IA non disponibile.`, hist:`CRONOLOGIA`,
+foot:`⚠️ Strumento di supporto alle decisioni — non infallibile.<br>Non cliccare né eseguire mai un file dubbio, anche se lo strumento indica «Sicuro».`,
+safe:`Probabilmente sicuro`, warn:`Sospetto`, danger:`Pericoloso`, tURL:`🔗 URL`, tFile:`📁 File`,
+ext:`Estensione`, size:`Dimensione`, read:`Contenuto letto`, yes:`Sì`, no:`No`, prev:`ANTEPRIMA DEL CONTENUTO`, unk:`tipo sconosciuto`, mod:`Modificato`,
+lang:`Lingua`, partial:``,
+clr:`Cancella`, b1:`🆓 Gratis, senza account`, b2:`🔒 Il link non viene mai aperto`, b3:`📂 File letti sul tuo dispositivo`, b4:`🧹 Cronologia cancellata alla chiusura`,
+priv:`Solo l'indirizzo del link — o il nome di un file e un breve estratto se è testo — viene inviato all'IA per un parere. Questo sito non salva nulla.`,
+tipsafe:`✨ Buone notizie: nessun segnale d'allarme. Resta comunque attento — nessuno strumento è perfetto.`, tipwarn:`🙂 Nessuna preoccupazione: ci sono solo alcuni punti da controllare. Nel dubbio, non aprirlo.`, tipdanger:`💚 Niente panico: la scansione non ha aperto né installato nulla. Basta non cliccare e eliminarlo.`,
+histClr:`🗑️ Cancella tutto`,
+uInv:[`URL non valido`,`Formato non riconosciuto.`],
+uHttp:[`Niente HTTPS`,`Connessione non cifrata.`],
+uHttps:[`HTTPS attivo`,`La connessione è cifrata.`],
+uIp:[`Indirizzo IP diretto`,`I siti legittimi usano nomi di dominio.`],
+uTld:[`TLD sospetto ({0})`,`Molto spesso associato a truffe.`],
+uShort:[`Link accorciato`,`Destinazione nascosta.`],
+uKw2:[`Parole chiave di phishing`,`Contiene «{0}» — phishing.`],
+uKw1:[`Parola chiave sensibile`,`Contiene «{0}» — controlla il dominio.`],
+uAt:[`@ nell'URL`,`Tecnica di occultamento. Molto sospetto.`],
+uSub:[`Troppi sottodomini`,`{0} sottodomini rilevati.`],
+uLong:[`URL molto lungo`,`{0} caratteri.`],
+uExe:[`File eseguibile`,`Questo link scarica codice eseguibile.`],
+uPuny:[`Dominio Punycode`,`Può imitare visivamente un dominio legittimo.`],
+uTrust:[`Dominio importante riconosciuto`,`Tra i siti più noti.`],
+uNone:[`Nessuna anomalia rilevata`,`I controlli non hanno trovato nulla di sospetto.`],
+fDanger:[`Estensione pericolosa (.{0})`,`Questo tipo di file può eseguire codice dannoso sul tuo computer.`],
+fHigh:[`Estensione a rischio (.{0})`,`Questo tipo di file può contenere eseguibili o codice nascosto.`],
+fScript:[`Script (.{0})`,`Gli script possono eseguire comandi di sistema se avviati.`],
+fCommon:[`Estensione comune (.{0})`,`Questo tipo di file è in genere innocuo.`],
+fUnk:[`Estensione sconosciuta (.{0})`,`Estensione non riconosciuta — fai attenzione.`],
+fDbl:[`Trappola della doppia estensione`,`File chiamato «*.{0}.{1}» — tecnica classica per ingannare l'utente.`],
+fTiny:[`Eseguibile molto piccolo`,`{0} — i malware sono spesso minuscoli (dropper/loader).`],
+fBig:[`File molto grande`,`{0} — insolito per un eseguibile.`],
+fSize:[`Dimensione del file`,`{0}`],
+fName:[`Nome sospetto`,`Contiene «{0}» — termine spesso usato nei file trappola.`],
+fMime:[`Tipo MIME ≠ estensione`,`Il browser indica «{0}» ma l'estensione è .{1} — possibile camuffamento.`],
+pIex:[`Esecuzione PowerShell`,`Comando PowerShell di esecuzione remota rilevato (IEX).`],
+pDl:[`Download di codice`,`Tentativo di scaricare codice da internet.`],
+pB64:[`Codifica Base64`,`Contenuto codificato in Base64 — può nascondere codice dannoso.`],
+pEval:[`eval() rilevato`,`Esecuzione dinamica di codice — rischio di offuscamento.`],
+pShell:[`Riferimenti alla shell di Windows`,`Chiamate a interpreti Windows rilevate.`],
+pDest:[`Comandi distruttivi`,`Comandi di cancellazione o formattazione del disco.`],
+pUnc:[`Percorso di rete (UNC)`,`Percorso di rete remoto rilevato nel contenuto.`],
+fOk:[`Contenuto analizzato`,`Nessun pattern dannoso evidente nel contenuto leggibile.`],
+fLong:[`Stringhe lunghe sospette`,`{0} stringhe di oltre 200 caratteri rilevate — possibile offuscamento.`]
+},
+
+ru: {
+title:`LinkGuard — Проверка ссылок и файлов`,
+tagline:`Проверка ссылок и файлов — эвристический анализ + ИИ`,
+tabUrl:`🔗 Ссылка`, tabFile:`📁 Файл`, ph:`Вставьте ссылку сюда…`, scan:`🔍 Проверить`,
+quick:`БЫСТРЫЕ ПРИМЕРЫ`, exIp:`🚨 Прямой IP`, exPhish:`🚨 Фишинг`, exShort:`⚠️ Короткая ссылка`, exExe:`🚨 .exe`,
+dzTitle:`Перетащите файл сюда`, dzSub:`или <span>нажмите, чтобы выбрать</span> файл на устройстве`,
+more:`и другие…`, analyze:`🔍 Анализировать`, rm:`Удалить файл`, risk:`Уровень риска`,
+ai:`Анализ ИИ — Claude`, aiLoad:`Идёт анализ ИИ…`, aiNo:`Анализ ИИ недоступен.`, hist:`ИСТОРИЯ`,
+foot:`⚠️ Вспомогательный инструмент — не безошибочен.<br>Никогда не переходите по сомнительным ссылкам и не запускайте сомнительные файлы, даже если инструмент показывает «Безопасно».`,
+safe:`Вероятно безопасно`, warn:`Подозрительно`, danger:`Опасно`, tURL:`🔗 URL`, tFile:`📁 Файл`,
+ext:`Расширение`, size:`Размер`, read:`Содержимое прочитано`, yes:`Да`, no:`Нет`, prev:`ПРЕДПРОСМОТР СОДЕРЖИМОГО`, unk:`неизвестный тип`, mod:`Изменён`,
+lang:`Язык`, partial:``,
+clr:`Очистить`, b1:`🆓 Бесплатно, без аккаунта`, b2:`🔒 Ссылка никогда не открывается`, b3:`📂 Файлы читаются на вашем устройстве`, b4:`🧹 История стирается при закрытии`,
+priv:`ИИ для оценки передаётся только адрес ссылки — или имя файла и короткий фрагмент, если это текст. Этот сайт ничего не сохраняет.`,
+tipsafe:`✨ Хорошие новости: тревожных признаков нет. Всё же будьте внимательны — идеальных инструментов не бывает.`, tipwarn:`🙂 Не волнуйтесь: нужно лишь проверить пару моментов. Если сомневаетесь — не открывайте.`, tipdanger:`💚 Без паники: при проверке ничего не открывалось и не устанавливалось. Просто не нажимайте и удалите.`,
+histClr:`🗑️ Очистить всё`,
+uInv:[`Недопустимый URL`,`Формат не распознан.`],
+uHttp:[`Нет HTTPS`,`Соединение не зашифровано.`],
+uHttps:[`HTTPS включён`,`Соединение зашифровано.`],
+uIp:[`Прямой IP-адрес`,`Надёжные сайты используют доменные имена.`],
+uTld:[`Подозрительный TLD ({0})`,`Очень часто связан с мошенничеством.`],
+uShort:[`Сокращённая ссылка`,`Конечный адрес скрыт.`],
+uKw2:[`Фишинговые ключевые слова`,`Содержит «{0}» — фишинг.`],
+uKw1:[`Чувствительное ключевое слово`,`Содержит «{0}» — проверьте домен.`],
+uAt:[`@ в URL`,`Приём маскировки. Очень подозрительно.`],
+uSub:[`Слишком много поддоменов`,`Обнаружено поддоменов: {0}.`],
+uLong:[`Очень длинный URL`,`Символов: {0}.`],
+uExe:[`Исполняемый файл`,`Эта ссылка скачивает исполняемый код.`],
+uPuny:[`Домен Punycode`,`Может визуально имитировать настоящий домен.`],
+uTrust:[`Известный крупный домен`,`Один из самых известных сайтов.`],
+uNone:[`Аномалий не обнаружено`,`Проверки не выявили ничего подозрительного.`],
+fDanger:[`Опасное расширение (.{0})`,`Файл такого типа может запустить вредоносный код на вашем компьютере.`],
+fHigh:[`Рискованное расширение (.{0})`,`Файл такого типа может содержать исполняемые файлы или скрытый код.`],
+fScript:[`Скрипт (.{0})`,`Скрипты могут выполнять системные команды при запуске.`],
+fCommon:[`Обычное расширение (.{0})`,`Файлы такого типа обычно безопасны.`],
+fUnk:[`Неизвестное расширение (.{0})`,`Расширение не распознано — будьте осторожны.`],
+fDbl:[`Ловушка двойного расширения`,`Файл назван «*.{0}.{1}» — классический приём для обмана пользователя.`],
+fTiny:[`Очень маленький исполняемый файл`,`{0} — вредоносные программы часто крошечные (dropper/loader).`],
+fBig:[`Очень большой файл`,`{0} — необычно для исполняемого файла.`],
+fSize:[`Размер файла`,`{0}`],
+fName:[`Подозрительное имя`,`Содержит «{0}» — термин, часто встречающийся в заражённых файлах.`],
+fMime:[`Тип MIME ≠ расширение`,`Браузер сообщает «{0}», но расширение .{1} — возможна маскировка.`],
+pIex:[`Выполнение PowerShell`,`Обнаружена команда PowerShell для удалённого выполнения (IEX).`],
+pDl:[`Загрузка кода`,`Попытка скачать код из интернета.`],
+pB64:[`Кодировка Base64`,`Содержимое в Base64 — может скрывать вредоносный код.`],
+pEval:[`Обнаружен eval()`,`Динамическое выполнение кода — риск обфускации.`],
+pShell:[`Обращения к оболочке Windows`,`Обнаружены вызовы интерпретаторов Windows.`],
+pDest:[`Разрушительные команды`,`Команды удаления файлов или форматирования диска.`],
+pUnc:[`Сетевой путь (UNC)`,`В содержимом обнаружен удалённый сетевой путь.`],
+fOk:[`Содержимое проанализировано`,`Явных вредоносных признаков в читаемом содержимом нет.`],
+fLong:[`Подозрительные длинные строки`,`Обнаружено строк длиннее 200 символов: {0} — возможна обфускация.`]
+},
+
+ar: {
+title:`LinkGuard — فاحص الروابط والملفات`,
+tagline:`فاحص الروابط والملفات — تحليل استدلالي + ذكاء اصطناعي`,
+tabUrl:`🔗 رابط URL`, tabFile:`📁 ملف`, ph:`الصق رابطًا هنا…`, scan:`🔍 فحص`,
+quick:`أمثلة سريعة`, exIp:`🚨 عنوان IP مباشر`, exPhish:`🚨 تصيّد`, exShort:`⚠️ رابط مختصر`, exExe:`🚨 .exe`,
+dzTitle:`اسحب ملفًا إلى هنا`, dzSub:`أو <span>انقر للاختيار</span> ملفًا من جهازك`,
+more:`والمزيد…`, analyze:`🔍 تحليل`, rm:`إزالة الملف`, risk:`مستوى الخطورة`,
+ai:`تحليل الذكاء الاصطناعي — Claude`, aiLoad:`جارٍ التحليل بالذكاء الاصطناعي…`, aiNo:`تحليل الذكاء الاصطناعي غير متاح.`, hist:`السجل`,
+foot:`⚠️ أداة مساعدة على اتخاذ القرار — وليست معصومة من الخطأ.<br>لا تنقر على ملف مشبوه ولا تشغّله أبدًا، حتى لو أظهرت الأداة «آمن».`,
+safe:`آمن على الأرجح`, warn:`مشبوه`, danger:`خطير`, tURL:`🔗 رابط`, tFile:`📁 ملف`,
+ext:`الامتداد`, size:`الحجم`, read:`قراءة المحتوى`, yes:`نعم`, no:`لا`, prev:`معاينة المحتوى`, unk:`نوع غير معروف`, mod:`تاريخ التعديل`,
+lang:`اللغة`, partial:``,
+clr:`مسح`, b1:`🆓 مجاني وبدون حساب`, b2:`🔒 لا يُفتح الرابط أبدًا`, b3:`📂 تُقرأ الملفات على جهازك`, b4:`🧹 يُمسح السجل عند إغلاق الصفحة`,
+priv:`يُرسل إلى الذكاء الاصطناعي فقط عنوان الرابط — أو اسم الملف ومقتطف قصير إن كان نصًا — لأخذ رأيه. هذا الموقع لا يحفظ أي شيء.`,
+tipsafe:`✨ أخبار جيدة: لا توجد علامات تحذير. ومع ذلك ابقَ منتبهًا — لا توجد أداة كاملة.`, tipwarn:`🙂 لا تقلق: هناك بعض النقاط فقط للتحقق منها. عند الشك، لا تفتحه.`, tipdanger:`💚 لا داعي للذعر: لم يفتح الفحص شيئًا ولم يثبّت شيئًا. يكفي ألا تنقر عليه وأن تحذفه.`,
+histClr:`🗑️ مسح الكل`,
+uInv:[`رابط غير صالح`,`الصيغة غير معروفة.`],
+uHttp:[`بدون HTTPS`,`اتصال غير مشفّر.`],
+uHttps:[`HTTPS مفعّل`,`الاتصال مشفّر.`],
+uIp:[`عنوان IP مباشر`,`المواقع الموثوقة تستخدم أسماء نطاقات.`],
+uTld:[`نطاق علوي مشبوه ({0})`,`يرتبط كثيرًا بعمليات الاحتيال.`],
+uShort:[`رابط مختصر`,`الوجهة مخفية.`],
+uKw2:[`كلمات مفتاحية للتصيّد`,`يحتوي على «{0}» — تصيّد احتيالي.`],
+uKw1:[`كلمة مفتاحية حساسة`,`يحتوي على «{0}» — تحقق من النطاق.`],
+uAt:[`رمز @ في الرابط`,`أسلوب تمويه. مشبوه جدًا.`],
+uSub:[`نطاقات فرعية كثيرة`,`تم اكتشاف {0} نطاقات فرعية.`],
+uLong:[`رابط طويل جدًا`,`{0} حرفًا.`],
+uExe:[`ملف تنفيذي`,`هذا الرابط يحمّل شيفرة تنفيذية.`],
+uPuny:[`نطاق Punycode`,`قد يحاكي نطاقًا حقيقيًا بصريًا.`],
+uTrust:[`نطاق كبير معروف`,`من أشهر المواقع.`],
+uNone:[`لم تُكتشف أي مشكلة`,`لم تجد الفحوصات شيئًا مشبوهًا.`],
+fDanger:[`امتداد خطير (.{0})`,`هذا النوع من الملفات قد ينفّذ شيفرة خبيثة على جهازك.`],
+fHigh:[`امتداد عالي الخطورة (.{0})`,`قد يحتوي هذا النوع على ملفات تنفيذية أو شيفرة مخفية.`],
+fScript:[`سكربت (.{0})`,`قد تنفّذ السكربتات أوامر النظام عند تشغيلها.`],
+fCommon:[`امتداد شائع (.{0})`,`هذا النوع من الملفات آمن عادةً.`],
+fUnk:[`امتداد غير معروف (.{0})`,`امتداد غير معروف — كن حذرًا.`],
+fDbl:[`فخ الامتداد المزدوج`,`اسم الملف «*.{0}.{1}» — أسلوب كلاسيكي لخداع المستخدم.`],
+fTiny:[`ملف تنفيذي صغير جدًا`,`{0} — البرمجيات الخبيثة غالبًا ما تكون صغيرة جدًا (dropper/loader).`],
+fBig:[`ملف كبير جدًا`,`{0} — غير معتاد لملف تنفيذي.`],
+fSize:[`حجم الملف`,`{0}`],
+fName:[`اسم مشبوه`,`يحتوي على «{0}» — مصطلح يُستخدم كثيرًا في الملفات المفخخة.`],
+fMime:[`نوع MIME ≠ الامتداد`,`يعلن المتصفح «{0}» لكن الامتداد هو .{1} — احتمال تمويه.`],
+pIex:[`تنفيذ PowerShell`,`تم اكتشاف أمر PowerShell للتنفيذ عن بُعد (IEX).`],
+pDl:[`تنزيل شيفرة`,`محاولة تنزيل شيفرة من الإنترنت.`],
+pB64:[`ترميز Base64`,`محتوى مرمّز بـ Base64 — قد يخفي شيفرة خبيثة.`],
+pEval:[`تم اكتشاف eval()`,`تنفيذ ديناميكي للشيفرة — خطر التعتيم.`],
+pShell:[`إشارات إلى صَدَفة Windows`,`تم اكتشاف استدعاءات لمفسّرات Windows.`],
+pDest:[`أوامر تدميرية`,`أوامر حذف أو تهيئة القرص.`],
+pUnc:[`مسار شبكة (UNC)`,`تم اكتشاف مسار شبكة بعيد في المحتوى.`],
+fOk:[`تم تحليل المحتوى`,`لا نمط خبيث واضح في المحتوى المقروء.`],
+fLong:[`سلاسل طويلة مشبوهة`,`تم اكتشاف {0} سلسلة تتجاوز 200 حرف — احتمال تعتيم.`]
+},
+
+zh: {
+title:`LinkGuard — 链接与文件检测器`,
+tagline:`链接与文件检测器 — 启发式分析 + AI`,
+tabUrl:`🔗 网址链接`, tabFile:`📁 文件`, ph:`在此粘贴链接…`, scan:`🔍 扫描`,
+quick:`快速示例`, exIp:`🚨 直接 IP`, exPhish:`🚨 钓鱼`, exShort:`⚠️ 短链接`, exExe:`🚨 .exe`,
+dzTitle:`将文件拖到此处`, dzSub:`或<span>点击选择</span>设备上的文件`,
+more:`以及更多…`, analyze:`🔍 分析`, rm:`移除文件`, risk:`风险等级`,
+ai:`AI 分析 — Claude`, aiLoad:`AI 分析中…`, aiNo:`AI 分析不可用。`, hist:`历史记录`,
+foot:`⚠️ 辅助决策工具 — 并非万无一失。<br>即使工具显示“安全”，也不要点击或运行可疑文件。`,
+safe:`可能安全`, warn:`可疑`, danger:`危险`, tURL:`🔗 网址`, tFile:`📁 文件`,
+ext:`扩展名`, size:`大小`, read:`已读取内容`, yes:`是`, no:`否`, prev:`内容预览`, unk:`未知类型`, mod:`修改于`,
+lang:`语言`, partial:``,
+clr:`清除`, b1:`🆓 免费，无需账号`, b2:`🔒 绝不打开链接`, b3:`📂 文件在你的设备上读取`, b4:`🧹 关闭页面即清除历史`,
+priv:`仅链接地址（若是文本文件，则为文件名和一小段摘录）会发送给 AI 征求意见。本网站不保存任何内容。`,
+tipsafe:`✨ 好消息：没有发现警示信号。但仍请保持警惕——没有任何工具是完美的。`, tipwarn:`🙂 别担心：只有几点需要再确认。如有疑问，请不要打开。`, tipdanger:`💚 别慌：扫描没有打开或安装任何东西。只要不点击并删除它即可。`,
+histClr:`🗑️ 全部清除`,
+uInv:[`无效网址`,`无法识别的格式。`],
+uHttp:[`未使用 HTTPS`,`连接未加密。`],
+uHttps:[`已启用 HTTPS`,`连接已加密。`],
+uIp:[`直接使用 IP 地址`,`正规网站使用域名。`],
+uTld:[`可疑顶级域名（{0}）`,`经常与诈骗相关。`],
+uShort:[`短链接`,`目标地址被隐藏。`],
+uKw2:[`钓鱼关键词`,`包含“{0}”——疑似钓鱼。`],
+uKw1:[`敏感关键词`,`包含“{0}”——请核对域名。`],
+uAt:[`网址中含有 @`,`伪装手法，非常可疑。`],
+uSub:[`子域名过多`,`检测到 {0} 级子域名。`],
+uLong:[`网址过长`,`{0} 个字符。`],
+uExe:[`可执行文件`,`此链接会下载可执行代码。`],
+uPuny:[`Punycode 域名`,`可能在视觉上冒充正规域名。`],
+uTrust:[`知名大型域名`,`属于最知名的网站之一。`],
+uNone:[`未发现异常`,`检查未发现任何可疑之处。`],
+fDanger:[`危险扩展名（.{0}）`,`此类文件可能在你的电脑上运行恶意代码。`],
+fHigh:[`高风险扩展名（.{0}）`,`此类文件可能包含可执行文件或隐藏代码。`],
+fScript:[`脚本（.{0}）`,`脚本一旦运行，可能执行系统命令。`],
+fCommon:[`常见扩展名（.{0}）`,`此类文件通常是无害的。`],
+fUnk:[`未知扩展名（.{0}）`,`无法识别的扩展名——请小心。`],
+fDbl:[`双重扩展名陷阱`,`文件名为“*.{0}.{1}”——欺骗用户的经典手法。`],
+fTiny:[`极小的可执行文件`,`{0} ——恶意软件通常很小（dropper/loader）。`],
+fBig:[`文件非常大`,`{0} ——对可执行文件来说不寻常。`],
+fSize:[`文件大小`,`{0}`],
+fName:[`可疑名称`,`包含“{0}”——常见于带毒文件的词语。`],
+fMime:[`MIME 类型 ≠ 扩展名`,`浏览器报告为“{0}”，但扩展名是 .{1}——可能是伪装。`],
+pIex:[`执行 PowerShell`,`检测到远程执行的 PowerShell 命令（IEX）。`],
+pDl:[`下载代码`,`尝试从互联网下载代码。`],
+pB64:[`Base64 编码`,`内容经 Base64 编码——可能隐藏恶意代码。`],
+pEval:[`检测到 eval()`,`动态执行代码——存在混淆风险。`],
+pShell:[`引用 Windows shell`,`检测到对 Windows 解释器的调用。`],
+pDest:[`破坏性命令`,`删除文件或格式化磁盘的命令。`],
+pUnc:[`网络路径（UNC）`,`内容中检测到远程网络路径。`],
+fOk:[`内容已分析`,`在可读内容中未发现明显的恶意特征。`],
+fLong:[`可疑的超长字符串`,`检测到 {0} 个超过 200 个字符的字符串——可能经过混淆。`]
+},
+
+ja: {
+title:`LinkGuard — リンク＆ファイルチェッカー`,
+tagline:`リンク＆ファイルチェッカー — ヒューリスティック分析 + AI`,
+tabUrl:`🔗 URL リンク`, tabFile:`📁 ファイル`, ph:`ここにリンクを貼り付け…`, scan:`🔍 スキャン`,
+quick:`クイック例`, exIp:`🚨 IP 直指定`, exPhish:`🚨 フィッシング`, exShort:`⚠️ 短縮リンク`, exExe:`🚨 .exe`,
+dzTitle:`ここにファイルをドロップ`, dzSub:`または<span>クリックして選択</span>（お使いのデバイスのファイル）`,
+more:`その他…`, analyze:`🔍 分析`, rm:`ファイルを削除`, risk:`リスクレベル`,
+ai:`AI 分析 — Claude`, aiLoad:`AI が分析中…`, aiNo:`AI 分析は利用できません。`, hist:`履歴`,
+foot:`⚠️ 判断を補助するツールです — 万能ではありません。<br>ツールが「安全」と表示しても、疑わしいファイルをクリック・実行しないでください。`,
+safe:`おそらく安全`, warn:`不審`, danger:`危険`, tURL:`🔗 URL`, tFile:`📁 ファイル`,
+ext:`拡張子`, size:`サイズ`, read:`内容を読み取り`, yes:`はい`, no:`いいえ`, prev:`内容のプレビュー`, unk:`不明な種類`, mod:`更新日`,
+lang:`言語`, partial:``,
+clr:`消去`, b1:`🆓 無料・アカウント不要`, b2:`🔒 リンクは決して開きません`, b3:`📂 ファイルはお使いの端末上で読み取り`, b4:`🧹 ページを閉じると履歴は消えます`,
+priv:`AI に意見を求めるために送られるのは、リンクのアドレス（テキストファイルの場合はファイル名と短い抜粋）だけです。このサイトは何も保存しません。`,
+tipsafe:`✨ 朗報：警告サインはありません。それでも注意は怠らないでください。完璧なツールはありません。`, tipwarn:`🙂 ご安心を：確認すべき点がいくつかあるだけです。迷ったら開かないでください。`, tipdanger:`💚 慌てないで：スキャンで何かが開いたりインストールされたりはしていません。クリックせず、削除すれば大丈夫です。`,
+histClr:`🗑️ すべて消去`,
+uInv:[`無効な URL`,`形式を認識できません。`],
+uHttp:[`HTTPS ではありません`,`暗号化されていない接続です。`],
+uHttps:[`HTTPS 有効`,`接続は暗号化されています。`],
+uIp:[`IP アドレス直指定`,`正規のサイトはドメイン名を使います。`],
+uTld:[`不審な TLD（{0}）`,`詐欺によく使われます。`],
+uShort:[`短縮リンク`,`リンク先が隠されています。`],
+uKw2:[`フィッシングのキーワード`,`「{0}」を含みます — フィッシングの疑い。`],
+uKw1:[`注意が必要なキーワード`,`「{0}」を含みます — ドメインを確認してください。`],
+uAt:[`URL に @ を含む`,`偽装の手口です。非常に不審です。`],
+uSub:[`サブドメインが多すぎる`,`サブドメインが {0} 個検出されました。`],
+uLong:[`非常に長い URL`,`{0} 文字。`],
+uExe:[`実行ファイル`,`このリンクは実行可能コードをダウンロードします。`],
+uPuny:[`Punycode ドメイン`,`正規のドメインに見た目を似せている可能性があります。`],
+uTrust:[`著名な大手ドメイン`,`最も有名なサイトのひとつです。`],
+uNone:[`異常は見つかりませんでした`,`チェックで不審な点は見つかりませんでした。`],
+fDanger:[`危険な拡張子（.{0}）`,`この種類のファイルはお使いの PC で悪意あるコードを実行する可能性があります。`],
+fHigh:[`リスクのある拡張子（.{0}）`,`この種類のファイルには実行ファイルや隠しコードが含まれる可能性があります。`],
+fScript:[`スクリプト（.{0}）`,`スクリプトは実行されるとシステムコマンドを実行できます。`],
+fCommon:[`一般的な拡張子（.{0}）`,`この種類のファイルは通常は無害です。`],
+fUnk:[`不明な拡張子（.{0}）`,`認識できない拡張子です — 注意してください。`],
+fDbl:[`二重拡張子の罠`,`ファイル名が「*.{0}.{1}」— ユーザーを欺く典型的な手口です。`],
+fTiny:[`非常に小さい実行ファイル`,`{0} — マルウェアはごく小さいことが多いです（dropper/loader）。`],
+fBig:[`非常に大きいファイル`,`{0} — 実行ファイルとしては異例です。`],
+fSize:[`ファイルサイズ`,`{0}`],
+fName:[`不審な名前`,`「{0}」を含みます — 罠ファイルによく使われる語です。`],
+fMime:[`MIME タイプ ≠ 拡張子`,`ブラウザは「{0}」と報告していますが、拡張子は .{1} です — 偽装の可能性。`],
+pIex:[`PowerShell の実行`,`リモート実行用の PowerShell コマンド（IEX）を検出しました。`],
+pDl:[`コードのダウンロード`,`インターネットからコードをダウンロードしようとしています。`],
+pB64:[`Base64 エンコード`,`Base64 でエンコードされた内容 — 悪意あるコードを隠している可能性があります。`],
+pEval:[`eval() を検出`,`動的なコード実行 — 難読化のリスクがあります。`],
+pShell:[`Windows シェルへの参照`,`Windows インタープリターの呼び出しを検出しました。`],
+pDest:[`破壊的なコマンド`,`ファイル削除やディスクフォーマットのコマンドです。`],
+pUnc:[`ネットワークパス（UNC）`,`内容にリモートのネットワークパスを検出しました。`],
+fOk:[`内容を分析しました`,`読み取れる内容に明らかな悪意あるパターンはありません。`],
+fLong:[`不審な長い文字列`,`200 文字を超える文字列を {0} 個検出 — 難読化の可能性があります。`]
+}
+};
+
+/* Langues d'écriture droite→gauche */
+const RTL = ['ar','he','fa','ur','ps','sd','ug','yi','dv','ckb'];
+
+/* Codes de langue (ISO 639-1 au complet + quelques extras très parlées).
+   Les noms sont générés par le navigateur (Intl.DisplayNames) dans chaque langue. */
+const LANG_CODES = ('aa ab ae af ak am an ar as av ay az ba be bg bi bm bn bo br bs ca ce ch co cr cs cu cv cy da de dv dz ee el en eo es et eu fa ff fi fj fo fr fy ga gd gl gn gu gv ha he hi ho hr ht hu hy hz ia id ie ig ii ik io is it iu ja jv ka kg ki kj kk kl km kn ko kr ks ku kv kw ky la lb lg li ln lo lt lu lv mg mh mi mk ml mn mr ms mt my na nb nd ne ng nl nn no nr nv ny oc oj om or os pa pi pl ps pt qu rm rn ro ru rw sa sc sd se sg si sk sl sm sn so sq sr ss st su sv sw ta te tg th ti tk tl tn to tr ts tt tw ty ug uk ur uz ve vi vo wa wo xh yi yo za zh zu ' +
+  'fil ceb haw hmn yue ckb mai bho kok gsw ast scn nap vec war ilo lus mni sat doi bal ba').split(' ').filter(Boolean);
+
+let LANG = 'en';
+
+function tr(key) {
+  const d = T[LANG];
+  if (d && d[key] !== undefined) return d[key];
+  if (T.en[key] !== undefined) return T.en[key];
+  return T.fr[key];
+}
+function fmt(s, args) { return String(s).replace(/\{(\d+)\}/g, (_, i) => args[i] ?? ''); }
+function t(key, ...a) { return fmt(tr(key), a); }
+/* Construit un résultat de vérification : [icône, niveau, clé, ...paramètres] */
+function chk(i, v, key, ...a) { const p = tr(key); return { i, v, l: fmt(p[0], a), d: fmt(p[1] ?? '', a) }; }
+
+function langNames(code) {
+  let nat = code, en = code;
+  try { nat = new Intl.DisplayNames([code], {type:'language'}).of(code) || code; } catch(e) {}
+  try { en  = new Intl.DisplayNames(['en'],  {type:'language'}).of(code) || code; } catch(e) {}
+  nat = nat.charAt(0).toLocaleUpperCase(code.length === 2 ? code : undefined) + nat.slice(1);
+  return { nat, en };
+}
+function langEnglishName() { return langNames(LANG).en; }
+
+function buildLangSelector() {
+  const sel = document.getElementById('langSel');
+  const full = [], others = [];
+  const seen = new Set();
+  LANG_CODES.forEach(code => {
+    if (seen.has(code)) return; seen.add(code);
+    const { nat, en } = langNames(code);
+    // ignore les codes que ce navigateur ne connaît pas
+    if (en.toLowerCase() === code && !T[code]) return;
+    const label = (nat.toLowerCase() === en.toLowerCase()) ? nat : `${nat} — ${en}`;
+    (T[code] ? full : others).push({ code, label, en });
+  });
+  const collator = new Intl.Collator('en');
+  full.sort((a,b) => collator.compare(a.en, b.en));
+  others.sort((a,b) => collator.compare(a.en, b.en));
+  const mkGroup = (name, arr) => {
+    const g = document.createElement('optgroup'); g.label = name;
+    arr.forEach(o => { const op = document.createElement('option'); op.value = o.code; op.textContent = o.label; g.appendChild(op); });
+    return g;
+  };
+  sel.innerHTML = '';
+  sel.appendChild(mkGroup('✔ Interface traduite · Translated UI', full));
+  sel.appendChild(mkGroup(`🌍 ${others.length} languages · langues · idiomas… (AI)`, others));
+}
+
+function pickInitialLang() {
+  try { const s = localStorage.getItem('lg_lang'); if (s && LANG_CODES.includes(s)) return s; } catch(e) {}
+  const n = (navigator.language || 'en').toLowerCase().split('-')[0];
+  return LANG_CODES.includes(n) ? n : 'en';
+}
+
+function applyLang() {
+  document.documentElement.lang = LANG;
+  document.documentElement.dir = RTL.includes(LANG) ? 'rtl' : 'ltr';
+  document.title = tr('title');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = tr(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = tr(el.dataset.i18nHtml); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = tr(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = tr(el.dataset.i18nTitle); });
+  document.getElementById('langNote').textContent = T[LANG] ? '' : T.en.partial;
+  renderFileMeta();
+  renderHistory();
+  renderDb();
+  rerenderResult();
+}
+
+function setLang(code) {
+  LANG = code;
+  try { localStorage.setItem('lg_lang', code); } catch(e) {}
+  applyLang();
+}
+
+/* ═══════════════ URL HEURISTICS ═══════════════ */
+function urlHeuristic(url) {
+  const r = []; let score = 0;
+  let u;
+  try { u = new URL(url); } catch(e) { return { r:[chk('❌','danger','uInv')], score:100 }; }
+  const host = u.hostname.toLowerCase(), path = u.pathname.toLowerCase(), full = url.toLowerCase();
+
+  if (u.protocol==='http:') { r.push(chk('⚠️','warn','uHttp')); score+=20; }
+  else r.push(chk('✅','safe','uHttps'));
+
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) { r.push(chk('🚨','danger','uIp')); score+=55; }
+  const badTlds=['.tk','.ml','.ga','.cf','.gq','.xyz','.top','.click','.download','.zip','.cam','.icu'];
+  const tld=host.match(/\.[^.]+$/)?.[0]||'';
+  if (badTlds.includes(tld)) { r.push(chk('🚨','danger','uTld',tld)); score+=45; }
+  const shorts=['bit.ly','tinyurl.com','t.co','goo.gl','ow.ly','short.link','rebrand.ly','cutt.ly','is.gd'];
+  if (shorts.some(s=>host===s||host.endsWith('.'+s))) { r.push(chk('⚠️','warn','uShort')); score+=25; }
+  const kw=['login','verify','account','secure','update','confirm','password','bank','paypal','paypa1','amazon','amaz0n','apple','microsoft','facebook','netflix','credential'];
+  const found=kw.filter(k=>full.includes(k));
+  if (found.length>=2) { r.push(chk('🚨','danger','uKw2',found.slice(0,3).join(', '))); score+=40; }
+  else if (found.length===1) { r.push(chk('⚠️','warn','uKw1',found[0])); score+=10; }
+  if (url.includes('@')) { r.push(chk('🚨','danger','uAt')); score+=60; }
+  const subs=host.split('.').length-2;
+  if (subs>2) { r.push(chk('⚠️','warn','uSub',subs)); score+=20; }
+  if (url.length>110) { r.push(chk('⚠️','warn','uLong',url.length)); score+=10; }
+  const exes=['.exe','.bat','.vbs','.ps1','.scr','.pif','.cmd','.msi','.jar','.hta','.dll'];
+  if (exes.some(e=>path.endsWith(e))) { r.push(chk('🚨','danger','uExe')); score+=50; }
+  if (host.includes('xn--')) { r.push(chk('🚨','danger','uPuny')); score+=45; }
+  const trusted=['google.com','youtube.com','facebook.com','amazon.com','microsoft.com','apple.com','github.com','wikipedia.org','twitter.com','x.com','instagram.com','linkedin.com'];
+  if (trusted.some(d=>host===d||host.endsWith('.'+d))) { r.push(chk('✅','safe','uTrust')); score=Math.max(0,score-30); }
+  if (r.filter(c=>c.v!=='safe').length===0&&score<15) r.push(chk('✅','safe','uNone'));
+  return { r, score:Math.min(100,score) };
+}
+
+/* ═══════════════ FILE HEURISTICS ═══════════════ */
+const FILE_PATTERNS = [
+  [/invoke-expression|iex\s*\(/i, 'pIex'],
+  [/downloadstring|downloadfile|webclient/i, 'pDl'],
+  [/base64|frombase64string/i, 'pB64'],
+  [/eval\s*\(/i, 'pEval'],
+  [/cmd\.exe|powershell|wscript|cscript/i, 'pShell'],
+  [/rm\s+-rf|del\s+\/f|format\s+c:/i, 'pDest'],
+  [/\\\\[0-9]{1,3}\.[0-9]{1,3}/, 'pUnc']
+];
+
+function fileHeuristic(file, content) {
+  const r = []; let score = 0;
+  const name = file.name.toLowerCase();
+  const ext = name.split('.').pop();
+  const size = file.size;
+
+  const dangerous = ['exe','bat','vbs','ps1','cmd','msi','scr','jar','hta','pif','dll','com','lnk','reg'];
+  const high = ['apk','dmg','iso','zip','rar','7z','tar'];
+  const scripts = ['js','py','php','sh','rb','pl','ts'];
+  const safe_exts = ['txt','pdf','png','jpg','jpeg','gif','mp4','mp3','svg','csv','json','md'];
+
+  if (dangerous.includes(ext)) { r.push(chk('🚨','danger','fDanger',ext)); score+=60; }
+  else if (high.includes(ext)) { r.push(chk('⚠️','warn','fHigh',ext)); score+=25; }
+  else if (scripts.includes(ext)) { r.push(chk('⚠️','warn','fScript',ext)); score+=20; }
+  else if (safe_exts.includes(ext)) { r.push(chk('✅','safe','fCommon',ext)); }
+  else { r.push(chk('⚠️','warn','fUnk',ext)); score+=15; }
+
+  const parts = name.split('.');
+  if (parts.length > 2) {
+    const penult = parts[parts.length-2];
+    if (safe_exts.includes(penult) && dangerous.includes(ext)) { r.push(chk('🚨','danger','fDbl',penult,ext)); score+=40; }
+  }
+
+  if (dangerous.includes(ext)) {
+    if (size < 50000) { r.push(chk('🚨','danger','fTiny',formatBytes(size))); score+=25; }
+    else if (size > 500000000) { r.push(chk('⚠️','warn','fBig',formatBytes(size))); score+=10; }
+    else r.push(chk('ℹ️','info','fSize',formatBytes(size)));
+  } else {
+    r.push(chk('ℹ️','info','fSize',formatBytes(size)));
+  }
+
+  const suspNames = ['invoice','facture','payment','update','crack','keygen','patch','hack','cheat','loader','bypass','free','gratuit','winrar','adobe'];
+  const foundNames = suspNames.filter(n => name.includes(n));
+  if (foundNames.length) { r.push(chk('⚠️','warn','fName',foundNames[0])); score+=15; }
+
+  if (file.type) {
+    const mimeExt = { 'application/pdf':['pdf'], 'image/jpeg':['jpg','jpeg'], 'image/png':['png'], 'text/plain':['txt'] };
+    const expected = mimeExt[file.type];
+    if (expected && !expected.includes(ext)) { r.push(chk('🚨','danger','fMime',file.type,ext)); score+=35; }
+  }
+
+  if (content) {
+    const found = FILE_PATTERNS.filter(([re]) => re.test(content));
+    if (found.length >= 2) { found.forEach(([,k]) => { r.push(chk('🚨','danger',k)); score+=30; }); }
+    else if (found.length === 1) { r.push(chk('⚠️','warn',found[0][1])); score+=15; }
+    else { r.push(chk('✅','safe','fOk')); }
+
+    const longStrings = content.match(/[A-Za-z0-9+/=]{200,}/g);
+    if (longStrings && longStrings.length > 2) { r.push(chk('⚠️','warn','fLong',longStrings.length)); score+=20; }
+  }
+
+  return { r, score: Math.min(100, score) };
+}
+
+/* ═══════════════ AI ANALYSIS ═══════════════ */
+async function aiFetch(body) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);   // évite un bouton bloqué sur ⏳
+  try {
+    return await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body), signal:ctrl.signal
+    });
+  } finally { clearTimeout(timer); }
+}
+
+async function getUrlAI(url) {
+  const res = await aiFetch({ model:"claude-sonnet-4-6", max_tokens:1000,
+      messages:[{role:"user",content:`You are a cybersecurity expert. Analyze this URL. Answer in ${langEnglishName()}, 3-4 sentences max. Start with exactly one of these emoji: ✅ (probably safe), ⚠️ (suspicious) or 🚨 (dangerous), followed by a short verdict label in ${langEnglishName()}, then explain why. URL: ${url}`}]
+  });
+  return (await res.json()).content?.[0]?.text || tr('aiNo');
+}
+
+async function getFileAI(file, content) {
+  const preview = (lastDeep && lastDeep.ai) || (content ? content.slice(0, 3000) : null);
+  const prompt = `You are a cybersecurity expert. Analyze this file and say whether it is dangerous. Answer in ${langEnglishName()}, 3-5 sentences max.
+Start with exactly one of these emoji: ✅ (probably safe), ⚠️ (suspicious) or 🚨 (dangerous), followed by a short verdict label in ${langEnglishName()}.
+
+File info:
+- Name: ${file.name}
+- Size: ${formatBytes(file.size)}
+- MIME type: ${file.type || 'unknown'}
+- Modified: ${new Date(file.lastModified).toISOString().slice(0,10)}
+${preview ? `\nContent excerpt (most suspicious lines first, as [line] code):\n\`\`\`\n${preview}\n\`\`\`` : '\n(Binary file — analysis based on metadata only)'}`;
+
+  const res = await aiFetch({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{role:"user",content:prompt}] });
+  return (await res.json()).content?.[0]?.text || tr('aiNo');
+}
+
+/* ═══════════════ DEEP SCAN : analyse ligne par ligne ═══════════════ */
+let lastDeep = null;
+/* [regex, poids, titre FR, explication FR, titre EN, explication EN] */
+const RULES = [
+[/\s-e(?:nc\w*)?\s+[A-Za-z0-9+\/=]{20,}/i,30,`PowerShell encodé en Base64`,`Lance PowerShell avec un script converti en Base64 pour que personne ne puisse lire ce qu'il exécute. C'est la méthode n°1 des « loaders » : le vrai code malveillant est caché dans ce bloc (décodé plus bas si possible).`,`Base64-encoded PowerShell`,`Runs PowerShell with a script converted to Base64 so nobody can read what it executes. Top loader technique: the real payload is hidden in that blob (decoded below when possible).`],
+[/\b(?:iex|invoke-expression)\b/i,30,`Exécution de texte comme code (IEX)`,`Transforme une chaîne de texte en commandes et les exécute immédiatement. Presque toujours utilisé pour lancer du code téléchargé ou décodé à la volée, sans jamais l'écrire sur le disque.`,`Text executed as code (IEX)`,`Turns a text string into commands and runs them immediately. Almost always used to launch code downloaded or decoded on the fly, never written to disk.`],
+[/downloadstring|downloadfile|downloaddata|invoke-webrequest|\biwr\b|invoke-restmethod|urldownloadtofile|bitsadmin.{0,40}\/transfer|certutil.{0,40}-urlcache|(?:curl|wget)\s[^|]{0,200}\|\s*(?:ba|z)?sh\b/i,30,`Téléchargement de code distant`,`Récupère un fichier ou un script depuis internet (souvent pour installer un 2ᵉ programme malveillant). C'est le rôle typique d'un « dropper ».`,`Remote code download`,`Fetches a file or script from the internet (often to install a second-stage malware). Typical "dropper" behaviour.`],
+[/-w(?:indowstyle)?\s+hidden|-nop(?:rofile)?\b|-noni\b|-ep\s+bypass|executionpolicy\s+bypass|-sta\s+-w\s+1/i,12,`Exécution cachée / contournement de sécurité`,`Cache la fenêtre et/ou désactive la politique d'exécution de PowerShell : l'utilisateur ne voit rien et les protections de base sont ignorées.`,`Hidden execution / security bypass`,`Hides the window and/or disables PowerShell's execution policy: the user sees nothing and basic protections are skipped.`],
+[/currentversion\\run|schtasks(?:\.exe)?\s+\/create|\\start\s?menu\\programs\\startup|reg\s+add.{0,80}\\run\b|new-service|sc(?:\.exe)?\s+create/i,25,`Persistance au démarrage`,`S'installe pour se relancer à chaque démarrage de Windows (clé « Run », tâche planifiée, service ou dossier Démarrage). Permet au malware de survivre à un redémarrage.`,`Startup persistence`,`Installs itself to relaunch at every Windows startup (Run key, scheduled task, service or Startup folder), letting malware survive reboots.`],
+[/set-mppreference|disablerealtimemonitoring|add-mppreference.{0,40}exclusion|netsh\s+(?:adv)?firewall.{0,60}(?:off|disable)|taskkill.{0,40}(?:msmpeng|defender|avast|mcafee|norton)|sc\s+(?:stop|config)\s+(?:windefend|wscsvc)/i,40,`Désactivation de l'antivirus / pare-feu`,`Coupe ou contourne Windows Defender, un antivirus ou le pare-feu pour pouvoir agir sans être détecté. Un programme légitime n'a aucune raison de faire ça.`,`Antivirus / firewall tampering`,`Disables or bypasses Windows Defender, an antivirus or the firewall to act undetected. A legitimate program has no reason to do this.`],
+[/rm\s+-rf\s+(?:\/|~|\*)|del\s+\/[fsq].{0,40}(?:\*|[a-z]:\\)|format\s+[a-z]:|vssadmin.{0,20}delete\s+shadows|wbadmin\s+delete|bcdedit.{0,60}recoveryenabled|cipher\s+\/w|dd\s+if=\S+\s+of=\/dev\/(?:sd|nvme)/i,50,`Destruction de données / sauvegardes`,`Efface des fichiers en masse, formate un disque ou supprime les points de restauration Windows. Les ransomwares et « wipers » font cela pour empêcher toute récupération.`,`Data / backup destruction`,`Mass-deletes files, formats a disk or removes Windows restore points. Ransomware and wipers do this to prevent recovery.`],
+[/mimikatz|sekurlsa|lsass|procdump|reg\s+save.{0,30}\\(?:sam|system)|ntds\.dit|login data|logins\.json|wallet\.dat|getasynckeystate|setwindowshookex|keylog/i,45,`Vol d'identifiants / espionnage clavier`,`Cherche mots de passe, cookies de navigateur, portefeuilles crypto ou base Windows (SAM/LSASS), ou enregistre les touches tapées. Objectif : voler tes comptes.`,`Credential theft / keylogging`,`Looks for passwords, browser cookies, crypto wallets or Windows credential stores (SAM/LSASS), or records keystrokes. Goal: steal your accounts.`],
+[/writeprocessmemory|createremotethread|ntunmapviewofsection|queueuserapc|setthreadcontext|ntcreatethreadex|virtualallocex|rtlcreateuserthread/i,40,`Injection de code dans un autre processus`,`Écrit du code dans la mémoire d'un autre programme (ex. explorer.exe) puis le fait exécuter, afin de se cacher derrière un processus de confiance.`,`Process injection`,`Writes code into another program's memory (e.g. explorer.exe) and runs it there, hiding behind a trusted process.`],
+[/tcpclient|nc(?:at)?(?:\.exe)?\s+-\w*e\b|\/dev\/tcp\/|bash\s+-i\s*>&|socket\.socket.{0,120}(?:dup2|subprocess|connect)|reverse.?shell/i,45,`Shell inversé (prise de contrôle à distance)`,`Ouvre une connexion vers un serveur de l'attaquant et lui donne un terminal sur ton PC : il peut ensuite taper des commandes à ta place.`,`Reverse shell (remote control)`,`Opens a connection to an attacker's server and hands them a terminal on your PC so they can type commands as you.`],
+[/\beval\s*\(|new\s+function\s*\(|fromcharcode|unescape\s*\(|\batob\s*\(|b64decode|frombase64string|(?:%[^%\s]{1,30}:~\d+,\d+%){3,}|(?:chr\(\d+\)\s*&\s*){4,}/i,15,`Obfuscation / exécution dynamique`,`Décode ou reconstruit du texte caché avant de l'exécuter (eval, base64, caractères assemblés un par un). Sert à rendre le code illisible pour les antivirus et les humains.`,`Obfuscation / dynamic execution`,`Decodes or rebuilds hidden text before running it (eval, base64, characters assembled one by one). Makes code unreadable to antivirus and humans.`],
+[/wscript\.shell|activexobject|createobject\s*\(\s*["'](?:wscript|scripting\.filesystemobject|msxml2|adodb\.stream|shell\.application)|mshta|regsvr32.{0,30}\/i:|rundll32.{0,40}(?:javascript|http)|wmic.{0,40}process\s+call|cmstp|installutil/i,25,`Outil Windows détourné (LOLBin)`,`Utilise un programme Windows légitime (mshta, regsvr32, WScript…) pour lancer ou télécharger du code. Le but est de passer sous le radar des antivirus.`,`Abused Windows tool (LOLBin)`,`Uses a legitimate Windows program (mshta, regsvr32, WScript…) to run or download code, slipping under antivirus radar.`],
+[/your files (?:have been|are) encrypted|how_to_decrypt|readme.{0,10}decrypt|(?:bitcoin|monero|btc).{0,100}(?:decrypt|ransom|your files)|(?:decrypt|ransom|your files).{0,100}(?:bitcoin|monero)/i,40,`Signature de ransomware`,`Texte typique d'une rançon : fichiers « chiffrés », paiement en crypto, instructions de déchiffrement. À ne surtout pas lancer.`,`Ransomware signature`,`Typical ransom wording: "encrypted" files, crypto payment, decryption instructions. Do not run it.`],
+[/discord(?:app)?\.com\/api\/webhooks|api\.telegram\.org\/bot|pastebin\.com\/raw|transfer\.sh|anonfiles|ngrok|https?:\/\/(?!(?:10|127)\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)(?:\d{1,3}\.){3}\d{1,3}|\\\\(?!(?:10|127)\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)(?:\d{1,3}\.){3}\d{1,3}/i,30,`Envoi / réception vers un serveur suspect`,`Contacte une adresse IP brute, un webhook Discord/Telegram ou un hébergeur anonyme : canaux classiques pour exfiltrer tes données ou recevoir des ordres.`,`Suspicious server communication`,`Contacts a raw IP, a Discord/Telegram webhook or an anonymous host: classic channels to exfiltrate your data or receive orders.`],
+[/start-process.{0,60}-verb\s+runas|fodhelper|eventvwr|uacbypass|reg\s+add.{0,60}ms-settings|-verb\s+runas/i,30,`Élévation de privilèges (UAC)`,`Tente d'obtenir les droits administrateur, parfois en contournant la fenêtre de confirmation Windows (UAC).`,`Privilege escalation (UAC)`,`Tries to gain administrator rights, sometimes bypassing Windows' UAC prompt.`]
+];
+
+Object.assign(T.fr, {
+dTitle:`LIGNES SUSPECTES`, dLine:`Ligne`, dOff:`Offset`, dWhat:`Ce que ça fait :`, dDec:`décodé depuis Base64`, dMore:`… et {0} autres détections non affichées.`,
+fMagic:[`Faux fichier : contenu ≠ extension`,`Le contenu est celui d'un programme ({0}) alors que l'extension est .{1} — déguisement.`],
+fPack:[`Exécutable compressé / packé`,`Sections à forte entropie : {0}. Les malwares sont souvent packés pour échapper aux antivirus.`],
+fScanText:[`Analyse complète`,`{0} lignes lues et testées une par une.`],
+fScanBin:[`Binaire analysé`,`Un .exe n'a pas de lignes de code lisibles : {0} chaînes de texte, appels système (API) et structure du fichier ont été examinés. Pour une certitude, ajoute un antivirus ou VirusTotal.`],
+fNoHit:[`Aucune ligne malveillante`,`Aucune règle de détection n'a trouvé de correspondance.`]
+});
+Object.assign(T.en, {
+dTitle:`SUSPICIOUS LINES`, dLine:`Line`, dOff:`Offset`, dWhat:`What it does:`, dDec:`decoded from Base64`, dMore:`… and {0} more detections not shown.`,
+fMagic:[`Fake file: content ≠ extension`,`The content is a program ({0}) but the extension is .{1} — disguise.`],
+fPack:[`Packed / compressed executable`,`High-entropy sections: {0}. Malware is often packed to evade antivirus.`],
+fScanText:[`Full analysis`,`{0} lines read and tested one by one.`],
+fScanBin:[`Binary analyzed`,`An .exe has no readable source lines: {0} text strings, system calls (APIs) and file structure were examined. For certainty, add an antivirus or VirusTotal.`],
+fNoHit:[`No malicious line`,`No detection rule matched.`]
+});
+
+function sniff(b) {
+  if (b[0]===0x4d && b[1]===0x5a) return 'exe';
+  if (b[0]===0x7f && b[1]===0x45 && b[2]===0x4c && b[3]===0x46) return 'elf';
+  if (b[0]===0x50 && b[1]===0x4b) return 'zip';
+  return '';
+}
+function entropy(a) {
+  const c = new Uint32Array(256); for (let i=0;i<a.length;i++) c[a[i]]++;
+  let e = 0; for (let i=0;i<256;i++) if (c[i]) { const p=c[i]/a.length; e -= p*Math.log2(p); } return e;
+}
+function b64text(b) {
+  try {
+    const bin = atob(b.slice(0, b.length - b.length % 4)); let a = bin;
+    if (bin.charCodeAt(1) === 0) { a = ''; for (let i=0;i<bin.length;i+=2) a += bin[i]; }   // UTF-16LE (PowerShell -enc)
+    return a.length > 8 && (a.match(/[\x20-\x7e\r\n\t]/g)||[]).length / a.length > 0.9 ? a : null;
+  } catch(e) { return null; }
+}
+const CMT = /^\s*(?:rem\s|::|\/\/|#(?!!)|<#)/i;      // lignes entièrement commentées = jamais exécutées
+function scanLine(d, s, pos, dec, skip) {
+  const hit = new Set(skip || []);
+  for (let r=0; r<RULES.length; r++) {
+    if (hit.has(r)) continue;
+    const m = s.match(RULES[r][0]);
+    if (!m || (d.bin && m[0].length < 7)) continue;       // en binaire, ignorer les correspondances trop courtes (bruit)
+    hit.add(r); d.cnt[r] = (d.cnt[r]||0) + 1;
+    if (d.cnt[r] <= 6) d.findings.push({ pos, r, s, idx:m.index, len:m[0].length, dec, inn:d.cur });
+  }
+  if (dec || d.bin) return;
+  const v = s.replace(/["']\s*[+&.]\s*["']/g, '').replace(/[`^]/g, '');   // "Down"+"load" et d^o^w^n → recollés
+  if (v !== s) scanLine(d, v, pos, true, hit);
+  if (d.nDec < 25) {
+    const mm = s.match(/[A-Za-z0-9+\/]{40,}={0,2}/g);
+    if (mm) for (const b of mm.slice(0,3)) { const t = b64text(b); if (t) { d.nDec++; scanLine(d, t, pos, true); } }
+  }
+}
+async function scanText(d, text) {
+  const lines = text.split(/\r\n|\r|\n/);
+  for (let i=0; i<lines.length; i++) {
+    const L = lines[i];
+    if (!L.trim() || CMT.test(L)) continue;
+    if (L.length <= 6000) scanLine(d, L, i+1, false);
+    else for (let o=0, c=0; o < L.length && c < 5000; o += 5500, c++) scanLine(d, L.slice(o, o+6000), i+1, false);   // lignes géantes : découpées, rien n'est ignoré
+    if (i % 20000 === 19999) await new Promise(r => setTimeout(r));
+  }
+  return lines.length;
+}
+function peInfo(buf, d) {
+  if (buf.length < 0x100) return;
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength), pe = dv.getUint32(0x3c, true);
+  if (pe + 24 > buf.length || dv.getUint32(pe, true) !== 0x4550) return;
+  const ns = dv.getUint16(pe+6, true); let sec = pe + 24 + dv.getUint16(pe+20, true); const packed = [];
+  for (let i=0; i<ns && i<96 && sec+40<=buf.length; i++, sec+=40) {
+    let nm = ''; for (let k=0; k<8 && buf[sec+k]; k++) nm += String.fromCharCode(buf[sec+k]);
+    const rs = dv.getUint32(sec+16, true), rp = dv.getUint32(sec+20, true);
+    if (rs < 512 || rp + rs > buf.length) continue;
+    const e = entropy(buf.subarray(rp, rp + Math.min(rs, 1048576)));
+    if (e > 7.2 || /^\.?(?:upx|aspack|themida|vmp|petite|mpress)/i.test(nm)) packed.push(`${nm||'?'} (${e.toFixed(2)})`);
+  }
+  if (packed.length) { d.notes.push(['⚠️','warn','fPack',packed.join(', ')]); d.score += 25; }
+}
+function extractStrings(buf) {
+  const out = []; let st = -1;
+  for (let i=0; i<=buf.length && out.length<300000; i++) {
+    const c = buf[i];
+    if (c >= 32 && c < 127) { if (st < 0) st = i; }
+    else { if (st >= 0 && i - st >= 6) out.push([st, String.fromCharCode.apply(null, buf.subarray(st, Math.min(i, st+400)))]); st = -1; }
+  }
+  for (let p=0; p<2; p++) {                                   // chaînes UTF-16LE (très courant dans les .exe Windows)
+    let u = '', us = -1;
+    for (let i=p; i+1<buf.length && out.length<300000; i+=2) {
+      const c = buf[i];
+      if (c >= 32 && c < 127 && buf[i+1] === 0) { if (us < 0) us = i; u += String.fromCharCode(c); }
+      else { if (u.length >= 6) out.push([us, u.slice(0,400)]); u = ''; us = -1; }
+    }
+  }
+  return out;
+}
+const ZEXE = /\.(?:exe|dll|scr|bat|cmd|ps1|vbs|vbe|js|jse|wsf|hta|lnk|msi|com|pif|cpl|jar)$/i;
+async function inflate(u8) {
+  const ds = new DecompressionStream('deflate-raw'), w = ds.writable.getWriter();
+  w.write(u8).catch(()=>{}); w.close().catch(()=>{});
+  const rd = ds.readable.getReader(), parts = []; let n = 0;
+  for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); n += value.length; if (n > 4194304) { rd.cancel(); break; } }
+  const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; } return out;
+}
+async function zipScan(buf, d) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength); let e = -1;
+  for (let i=buf.length-22; i>=Math.max(0, buf.length-65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) return 0;
+  const ents = []; let p = dv.getUint32(e+16, true);
+  for (let i=0, n=dv.getUint16(e+10, true); i<n && i<5000 && p+46<=buf.length && dv.getUint32(p, true)===0x02014b50; i++) {
+    const nl = dv.getUint16(p+28, true), xl = dv.getUint16(p+30, true), cl = dv.getUint16(p+32, true);
+    ents.push({ name:new TextDecoder().decode(buf.subarray(p+46, p+46+nl)), fl:dv.getUint16(p+8, true), m:dv.getUint16(p+10, true), cs:dv.getUint32(p+20, true), us:dv.getUint32(p+24, true), lo:dv.getUint32(p+42, true) });
+    p += 46 + nl + xl + cl;
+  }
+  const exe = ents.filter(x => ZEXE.test(x.name)).map(x => x.name);
+  if (exe.length) { d.notes.push(['⚠️','warn','fZipExe', exe.slice(0,5).join(', ')]); d.score += 40; }
+  if (ents.some(x => /\.(?:pdf|docx?|xlsx?|jpe?g|png|txt)\.(?:exe|scr|bat|cmd|vbs|js|lnk)$/i.test(x.name))) { d.notes.push(['🚨','danger','fZipDbl']); d.score += 25; }
+  if (ents.some(x => x.fl & 1)) { d.notes.push(['⚠️','warn','fZipEnc']); d.score += 20; }
+  if (ents.some(x => /vbaproject\.bin$/i.test(x.name))) { d.notes.push(['⚠️','warn','fZipMacro']); d.score += 25; }
+  for (const x of ents) {     // scripts dans l'archive : même analyse ligne par ligne
+    if (!/\.(?:bat|cmd|ps1|vbs|vbe|js|jse|wsf|hta|py|sh|php)$/i.test(x.name) || (x.fl & 1) || x.m > 8 || x.us > 4194304) continue;
+    try {
+      const ln = dv.getUint16(x.lo+26, true) + dv.getUint16(x.lo+28, true), raw = buf.subarray(x.lo+30+ln, x.lo+30+ln+x.cs);
+      d.cur = x.name; await scanText(d, new TextDecoder().decode(x.m === 8 ? await inflate(raw) : raw));
+    } catch(e) {}
+  }
+  d.cur = ''; return ents.length;
+}
+async function deepScan(file) {
+  const buf = new Uint8Array(await file.slice(0, 26214400).arrayBuffer());
+  const sha = file.size <= 26214400 ? await sha256(buf) : '';
+  const d = { file, sha, findings:[], notes:[], score:0, cnt:{}, nDec:0, cur:'', bin:false, ai:'' };
+  const ext = file.name.split('.').pop().toLowerCase(), sig = sniff(buf);
+  const docs = ['txt','pdf','png','jpg','jpeg','gif','mp3','mp4','doc','docx','csv','json','md','svg'];
+  if ((sig==='exe' && !['exe','dll','scr','sys','ocx','cpl','com','drv'].includes(ext)) || (sig==='elf' && docs.includes(ext))) {
+    d.notes.push(['🚨','danger','fMagic', sig==='exe'?'Windows PE':'ELF', ext]); d.score += 50;
+  }
+  const bom16 = buf[0]===0xff && buf[1]===0xfe;
+  if (sig === 'zip') { d.notes.push(['ℹ️','info','fScanZip', await zipScan(buf, d)]); }
+  else if (sig==='exe' || sig==='elf' || (!bom16 && buf.subarray(0, 8000).includes(0))) {
+    d.bin = true; if (sig==='exe') peInfo(buf, d);
+    const str = extractStrings(buf);
+    for (const [off, s] of str) scanLine(d, s, '0x'+off.toString(16).toUpperCase(), false);
+    d.notes.push(['ℹ️','info','fScanBin', str.length]);
+  } else {
+    d.notes.push(['ℹ️','info','fScanText', await scanText(d, new TextDecoder(bom16 ? 'utf-16le' : 'utf-8').decode(buf))]);
+  }
+  /* score par familles : la règle la plus grave compte plein, les suivantes de moins en moins (évite qu'un script admin banal devienne « dangereux ») */
+  const ws = Object.keys(d.cnt).map(r => RULES[r][1] + Math.min(d.cnt[r]-1, 5)).sort((a,b) => b-a), K = [1,.7,.5,.35,.25];
+  let sc = 0; ws.forEach((w,i) => sc += w * K[Math.min(i,4)]);
+  d.score = Math.min(90, d.score + Math.round(sc * (d.bin ? .75 : 1)));
+  if (!d.findings.length && !d.notes.some(n => n[1]==='warn' || n[1]==='danger')) d.notes.push(['✅','safe','fNoHit']);
+  d.ai = d.findings.slice(0,12).map(f => `[${f.inn?f.inn+':':''}${f.pos}] ${f.s.slice(Math.max(0,f.idx-60), f.idx+f.len+60)}`).join('\n');
+  dbApplyFile(d); return d;
+}
+Object.assign(T.fr, {
+dDec:`désobfusqué`,
+fZipExe:[`Programmes / scripts dans l'archive`,`Contient : {0}. Embarquer un exécutable dans une archive est le mode de diffusion n°1 des malwares.`],
+fZipDbl:[`Double extension dans l'archive`,`Un fichier « document.pdf.exe » se fait passer pour un document alors que c'est un programme.`],
+fZipEnc:[`Archive protégée par mot de passe`,`Le contenu chiffré ne peut être inspecté ni par cet outil ni par un antivirus : technique courante pour faire passer un malware.`],
+fZipMacro:[`Macros Office détectées`,`Le document contient un projet VBA (vbaProject.bin) : les macros sont un vecteur d'infection classique.`],
+fScanZip:[`Archive analysée`,`{0} fichiers listés ; les scripts à l'intérieur sont lus ligne par ligne, les autres fichiers ne sont pas ouverts.`]
+});
+Object.assign(T.en, {
+dDec:`deobfuscated`,
+fZipExe:[`Programs / scripts inside the archive`,`Contains: {0}. Bundling an executable in an archive is malware's #1 delivery method.`],
+fZipDbl:[`Double extension inside the archive`,`A file like "document.pdf.exe" poses as a document but is a program.`],
+fZipEnc:[`Password-protected archive`,`Encrypted content can't be inspected by this tool or by antivirus: a common way to slip malware through.`],
+fZipMacro:[`Office macros detected`,`The document contains a VBA project (vbaProject.bin): macros are a classic infection vector.`],
+fScanZip:[`Archive analyzed`,`{0} files listed; scripts inside are read line by line, other files are not opened.`]
+});
+function deepMerge(res) {
+  res.r.push(...lastDeep.notes.map(n => chk(n[0], n[1], n[2], ...n.slice(3))));
+  res.score = Math.min(100, res.score + lastDeep.score);
+}
+function deepHtml() {
+  const d = lastDeep, fr = LANG === 'fr';
+  if (!d.findings.length) return '';
+  const list = [...d.findings].sort((a,b) => RULES[b.r][1] - RULES[a.r][1]).slice(0, 40);
+  let h = `<div class="code-preview"><div class="code-head">${tr('dTitle')} (${d.findings.length})</div>`;
+  for (const f of list) {
+    const R = RULES[f.r], a = Math.max(0, f.idx - 80);
+    const tag = (f.inn ? f.inn + ' · ' : '') + (typeof f.pos === 'number' ? tr('dLine') : tr('dOff')) + ' ' + f.pos + (f.dec ? ' · ' + tr('dDec') : '');
+    h += `<div class="finding"><div class="f-head"><span>${R[1]>=30?'🚨':'⚠️'} ${fr?R[2]:R[4]}</span><span class="f-ln">${tag}</span></div>
+<div class="f-code">${a>0?'…':''}${escHtml(f.s.slice(a,f.idx))}<mark>${escHtml(f.s.slice(f.idx,f.idx+f.len))}</mark>${escHtml(f.s.slice(f.idx+f.len,f.idx+f.len+120))}</div>
+<div class="f-what"><b>${tr('dWhat')}</b> ${fr?R[3]:R[5]}</div></div>`;
+  }
+  if (d.findings.length > 40) h += `<div class="f-what">${t('dMore', d.findings.length - 40)}</div>`;
+  return h + '</div>';
+}
+
+/* ═══════════════ BASE DE DONNÉES : signatures + mémoire des détections ═══════════════ */
+const FAM = [
+['EICAR (fichier de test antivirus)',90,/X5O!P%@AP\[4\\PZX54\(P\^\)7CC\)7\}\$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!\$H\+H\*/,`Chaîne officielle de test des antivirus : totalement inoffensive, mais tous les antivirus la signalent comme un vrai virus. Pratique pour vérifier que la protection fonctionne.`,`Official antivirus test string: completely harmless, but every antivirus flags it like a real virus. Handy to check protection works.`],
+['Mimikatz',55,/mimikatz|sekurlsa::|gentilkiwi|kerberos::golden/i,`Outil de vol de mots de passe Windows : il extrait les identifiants de la mémoire de l'ordinateur. Très utilisé par les pirates et les ransomwares (peut aussi figurer dans un outil de sécurité légitime).`,`Windows password-theft tool: extracts credentials from memory. Widely used by attackers and ransomware (may also appear in a legitimate security tool).`],
+['Metasploit / Meterpreter',50,/meterpreter|metsrv|msfvenom|windows\/(?:x64\/)?(?:meterpreter|shell)/i,`Framework d'attaque : le « meterpreter » donne à l'attaquant un contrôle complet de la machine à distance (fichiers, webcam, mots de passe).`,`Attack framework: "meterpreter" gives the attacker full remote control (files, webcam, passwords).`],
+['Cobalt Strike',55,/cobalt\s?strike|beacon(?:\.x64)?\.dll|%s\s+as\s+%s\\\\%s|\\\\\.\\pipe\\(?:msagent_|postex_)/i,`Outil d'intrusion professionnel détourné par de nombreux groupes de ransomware : le « beacon » appelle régulièrement un serveur pour recevoir des ordres.`,`Professional intrusion tool abused by many ransomware groups: the "beacon" regularly calls a server for orders.`],
+['PowerSploit / Empire / BloodHound',50,/invoke-(?:shellcode|reflectivepeinjection|kerberoast|bloodhound|mimikatz|dllinjection|tokenmanipulation)|powersploit|powershell\s*empire|sharphound/i,`Boîtes à outils d'attaque en PowerShell : injection de code en mémoire, vol de tickets Kerberos, cartographie du réseau d'entreprise.`,`PowerShell attack toolkits: in-memory code injection, Kerberos ticket theft, corporate network mapping.`],
+['njRAT / Bladabindi',60,/njrat|\|'\|'\||bladabindi/i,`Cheval de Troie d'accès à distance très répandu : enregistre les touches, active webcam et micro, vole les mots de passe.`,`Widespread remote-access trojan: logs keystrokes, turns on webcam and mic, steals passwords.`],
+['AsyncRAT / Quasar / Remcos',50,/asyncrat|asyncclient|quasarrat|\bxrat\b|remcos|breaking-security\.net/i,`Chevaux de Troie d'accès à distance : l'attaquant voit l'écran, copie les fichiers et exécute des commandes sur la machine infectée.`,`Remote-access trojans: the attacker sees the screen, copies files and runs commands on the infected machine.`],
+['WannaCry',80,/wan[ao]cry|wanacrypt0r|wncry@2ol7|@wanadecryptor@|\.wncry\b|iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea\.com/i,`Ransomware de 2017 qui s'est propagé dans le monde entier : il chiffre les fichiers et réclame une rançon en bitcoin.`,`2017 ransomware that spread worldwide: it encrypts files and demands a bitcoin ransom.`],
+['LockBit',60,/lockbit|restore-my-files\.txt/i,`Ransomware « en service » parmi les plus actifs : chiffre les fichiers, vole des données et menace de les publier.`,`One of the most active ransomware-as-a-service gangs: encrypts files, steals data and threatens to leak it.`],
+['Ryuk / Conti / REvil',60,/ryukreadme|\.ryk\b|conti_readme|readme_conti|sodinokibi|\brevil\b/i,`Ransomwares visant surtout les entreprises et les hôpitaux : chiffrement des serveurs puis demande de rançon élevée.`,`Ransomware mostly targeting companies and hospitals: server encryption followed by a large ransom demand.`],
+['Cryptomineur (XMRig…)',45,/xmrig|stratum\+(?:tcp|ssl):\/\/|cryptonight|minexmr|nanopool\.org|supportxmr/i,`Programme qui utilise ton processeur pour miner de la crypto-monnaie au profit de quelqu'un d'autre : PC lent, surchauffe, facture d'électricité.`,`Program that uses your CPU to mine cryptocurrency for someone else: slow PC, overheating, higher power bill.`],
+['Webshell PHP',70,/@?eval\s*\(\s*(?:base64_decode\s*\(\s*)?\$_(?:post|get|request|cookie)|c99shell|r57shell|b374k|wso\s*shell|assert\s*\(\s*\$_(?:post|request)/i,`Petit script posé sur un serveur web qui exécute n'importe quelle commande envoyée par l'attaquant : une porte dérobée permanente.`,`Small script dropped on a web server that runs any command the attacker sends: a permanent backdoor.`],
+['Botnet IoT (Mirai…)',60,/busybox\s+(?:mirai|satori|okiru|gafgyt|bashlite)|\bmirai\b.{0,30}(?:botnet|scanner|attack)/i,`Malware qui enrôle caméras, routeurs et objets connectés dans un réseau de machines zombies utilisé pour des attaques DDoS.`,`Malware that enrolls cameras, routers and smart devices into a zombie network used for DDoS attacks.`],
+['Fork bomb',50,/:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,`Commande qui se recopie à l'infini jusqu'à saturer la mémoire et faire planter la machine.`,`Command that copies itself endlessly until memory is exhausted and the machine crashes.`],
+['Exploit Log4Shell',55,/\$\{jndi:(?:ldaps?|rmi|dns|iiop|nis|corba):\/\//i,`Chaîne d'attaque de la faille Log4j (2021) : fait télécharger et exécuter du code à un serveur vulnérable.`,`Attack string for the 2021 Log4j flaw: makes a vulnerable server download and run code.`],
+['Stealers (RedLine, Lumma, Vidar, Agent Tesla…)',45,/redline\s*stealer|lumma\s*c2|lummac2|raccoon\s*stealer|\bvidar\b|formbook|agent\s*tesla|agenttesla/i,`Voleurs d'informations : récupèrent mots de passe enregistrés, cookies, portefeuilles crypto et les envoient à l'attaquant.`,`Information stealers: grab saved passwords, cookies and crypto wallets and send them to the attacker.`]
+];
+RULES.push(...FAM.map(f => [f[2], f[1], `Signature connue : ${f[0]}`, f[3], `Known signature: ${f[0]}`, f[4], f[0]]));
+RULES.push(
+[/\/(?:JavaScript|Launch|OpenAction|EmbeddedFile)\b/,20,`PDF avec contenu actif`,`Le PDF contient du JavaScript, une action automatique à l'ouverture ou un fichier embarqué : les PDF piégés s'en servent pour lancer du code ou un programme.`,`PDF with active content`,`The PDF contains JavaScript, an automatic open action or an embedded file: booby-trapped PDFs use them to launch code or a program.`],
+[/\b(?:auto_?open|document_open|workbook_open|autoexec)\b/i,20,`Macro Office à exécution automatique`,`S'exécute toute seule à l'ouverture du document Word/Excel : c'est le déclencheur n°1 des documents piégés.`,`Auto-running Office macro`,`Runs by itself when the Word/Excel document is opened: the #1 trigger of booby-trapped documents.`]
+);
+const HASHES = { '275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f': 'EICAR (fichier de test antivirus)' };
+const HOSTS = { 'iuqerfsodp9ifjaposdfjhgosurijfaewrwergwea.com': 'WannaCry (domaine « kill-switch » connu)' };
+const ABUSE = ['duckdns.org','ddns.net','no-ip.org','no-ip.biz','hopto.org','zapto.org','serveo.net','ngrok.io','ngrok-free.app','trycloudflare.com'];
+const BR = {
+google:'google.com google.fr google.co.uk googleapis.com gstatic.com', youtube:'youtube.com', paypal:'paypal.com paypal.fr paypal.me',
+amazon:'amazon.com amazon.fr amazon.co.uk amazon.de amazon.es amazon.it amazon.ca amazonaws.com', apple:'apple.com icloud.com',
+microsoft:'microsoft.com live.com office.com outlook.com microsoftonline.com windows.com', facebook:'facebook.com fb.com messenger.com',
+instagram:'instagram.com', netflix:'netflix.com', linkedin:'linkedin.com', github:'github.com github.io', twitter:'twitter.com x.com t.co',
+whatsapp:'whatsapp.com whatsapp.net', dropbox:'dropbox.com', adobe:'adobe.com', steam:'steampowered.com steamcommunity.com',
+discord:'discord.com discord.gg discordapp.com', binance:'binance.com', coinbase:'coinbase.com', metamask:'metamask.io', ebay:'ebay.com ebay.fr',
+spotify:'spotify.com', fedex:'fedex.com', laposte:'laposte.fr', colissimo:'colissimo.fr', chronopost:'chronopost.fr', ameli:'ameli.fr',
+impots:'impots.gouv.fr', creditagricole:'credit-agricole.fr', bnpparibas:'bnpparibas.com', wetransfer:'wetransfer.com'
+};
+Object.keys(BR).forEach(k => BR[k] = BR[k].split(' '));
+
+const DB = { items:[], hashes:{}, hosts:{} };
+let JR = null;   // dernier enregistrement : évite qu'un scan se « reconnaisse » lui-même
+function dbLoad() { try { const j = JSON.parse(localStorage.getItem('lg_db') || '{}'); if (Array.isArray(j.items)) DB.items = j.items; if (j.hashes) DB.hashes = j.hashes; if (j.hosts) DB.hosts = j.hosts; } catch(e) {} }
+function dbSave() { try { localStorage.setItem('lg_db', JSON.stringify(DB)); return true; } catch(e) { return false; } }
+dbLoad();
+async function sha256(buf) {
+  try { const h = await crypto.subtle.digest('SHA-256', buf); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2,'0')).join(''); } catch(e) { return ''; }
+}
+function ago(ts) { try { return new Date(ts).toLocaleDateString(LANG); } catch(e) { return new Date(ts).toLocaleDateString(); } }
+function hostOf(u) { try { return new URL(u).hostname.toLowerCase(); } catch(e) { return ''; } }
+function dbPrev(k) {
+  const it = DB.items.find(i => i.k === k); if (!it) return null;
+  const seen = it.seen - (JR && JR.k === k && JR.seen === it.seen ? 1 : 0);
+  return seen > 0 ? { ...it, seen } : null;
+}
+function hostMatch(host, obj) { const l = host.split('.'); for (let i=0; i<l.length-1; i++) { const c = l.slice(i).join('.'); if (obj[c]) return obj[c]; } return ''; }
+function dbRecord(t, label, score, d) {
+  if (score < 20) return;
+  const k = t === 'file' ? (d && d.sha) : hostOf(label); if (!k) return;
+  const now = Date.now(); let it = DB.items.find(i => i.k === k);
+  if (it) { it.seen++; it.last = now; it.sc = Math.max(it.sc, score); it.n = label; }
+  else DB.items.unshift(it = { k, t, n:label, sc:score, seen:1, first:now, last:now, fam:[] });
+  ((d && d.fams) || []).forEach(f => { if (!it.fam.includes(f)) it.fam.push(f); });
+  JR = { k, seen:it.seen };
+  DB.items = DB.items.slice(0, 300); dbSave(); renderDb();
+}
+function dbApplyFile(d) {
+  d.fams = [...new Set(Object.keys(d.cnt).map(r => RULES[r][6]).filter(Boolean))];
+  let loud = false;
+  const bad = d.sha && (HASHES[d.sha] || DB.hashes[d.sha]);
+  if (bad) { d.notes.push(['🚨','danger','fHash', bad]); d.score = 100; loud = true; }
+  if (d.fams.length) { d.notes.push(['🚨','danger','fFam', d.fams.join(', ')]); loud = true; }
+  const prev = d.sha && dbPrev(d.sha);
+  if (prev) { d.notes.push(['⚠️','warn','fSeen', prev.seen, ago(prev.first)]); d.score = Math.max(d.score, prev.sc); loud = true; }
+  if (loud) d.notes = d.notes.filter(n => n[2] !== 'fNoHit');
+  d.notes.push(['ℹ️','info','fCover']);
+  d.score = Math.min(100, d.score);
+}
+function dbImportText(txt) {
+  let n = 0; txt = String(txt).trim();
+  if (txt[0] === '{') {
+    const j = JSON.parse(txt);
+    for (const i of (j.items || [])) if (i && typeof i.k === 'string' && typeof i.n === 'string' && (i.t === 'file' || i.t === 'url') && !DB.items.some(x => x.k === i.k)) {
+      DB.items.push({ k:i.k.slice(0,200), t:i.t, n:i.n.slice(0,300), sc:+i.sc || 0, seen:+i.seen || 1, first:+i.first || Date.now(), last:+i.last || Date.now(), fam:Array.isArray(i.fam) ? i.fam.slice(0,5).map(String) : [] }); n++;
+    }
+    for (const [k,v] of Object.entries(j.hashes || {})) if (/^[a-f0-9]{64}$/i.test(k)) { DB.hashes[k.toLowerCase()] = String(v).slice(0,80); n++; }
+    for (const [k,v] of Object.entries(j.hosts || {})) if (/^[a-z0-9][a-z0-9.-]*\.[a-z0-9-]{2,}$/i.test(k)) { DB.hosts[k.toLowerCase()] = String(v).slice(0,80); n++; }
+  } else for (const line of txt.split(/\r?\n/)) {
+    const [a, ...rest] = line.trim().split(/[\s,;]+/); if (!a || /^[#\/]/.test(a)) continue;
+    const name = rest.join(' ').slice(0,80) || 'Import';
+    if (/^[a-f0-9]{64}$/i.test(a)) { DB.hashes[a.toLowerCase()] = name; n++; }
+    else if (/^[a-z0-9][a-z0-9.-]*\.[a-z0-9-]{2,}$/i.test(a)) { DB.hosts[a.toLowerCase()] = name; n++; }
+    if (n >= 20000) break;
+  }
+  return dbSave() ? n : -1;
+}
+/* ── URL : typosquatting, marques, hébergements jetables, base ── */
+function reg2(h) { const l = h.split('.'), n = l.length; return n >= 3 && l[n-1].length === 2 && ['co','com','org','net','gov','ac','gouv'].includes(l[n-2]) ? l.slice(-3).join('.') : l.slice(-2).join('.'); }
+function norm(s) { return s.replace(/[-_]/g,'').replace(/rn/g,'m').replace(/vv/g,'w').replace(/0/g,'o').replace(/1/g,'l').replace(/3/g,'e').replace(/5/g,'s'); }
+function editDist(a, b) {
+  let p = Array.from({ length:b.length+1 }, (_, i) => i);
+  for (let i=1; i<=a.length; i++) { const c = [i]; for (let j=1; j<=b.length; j++) c[j] = Math.min(p[j]+1, c[j-1]+1, p[j-1] + (a[i-1] === b[j-1] ? 0 : 1)); p = c; }
+  return p[b.length];
+}
+function urlExtra(url, o) {
+  let u; try { u = new URL(url); } catch(e) { return; }
+  const host = u.hostname.toLowerCase(), add = (i, v, k, sc, ...a) => { o.r.push(chk(i, v, k, ...a)); o.score = Math.min(100, o.score + sc); o.flag = true; };
+  const bad = hostMatch(host, HOSTS) || hostMatch(host, DB.hosts);
+  if (bad) { add('🚨','danger','uBad',0,bad); o.score = 100; }
+  const prev = dbPrev(host);
+  if (prev) { add('⚠️','warn','fSeen',0,prev.seen,ago(prev.first)); o.score = Math.max(o.score, prev.sc); }
+  const ab = ABUSE.find(d => host === d || host.endsWith('.' + d)); if (ab) add('⚠️','warn','uAbuse',20,ab);
+  if (!/^[\d.]+$/.test(host)) {
+    const reg = reg2(host), raw = reg.split('.')[0], toks = raw.split('-').map(norm), full = norm(raw);
+    const sub = host.slice(0, Math.max(0, host.length - reg.length - 1)).split('.').filter(Boolean).map(norm);
+    for (const b in BR) {
+      if (BR[b].includes(reg) || raw === b) continue;
+      if (toks.includes(b) || full === b || (b.length >= 6 && (editDist(full, b) === 1 || toks.some(x => editDist(x, b) === 1)))) { add('🚨','danger','uTypo',50,reg,b); break; }
+      if (sub.some(x => x === b || (b.length >= 5 && x.includes(b)))) { add('🚨','danger','uBrandSub',40,b); break; }
+    }
+  }
+  if (u.port) add('⚠️','warn','uPort',10,u.port);
+  if (/[?&](?:url|redirect|redir|next|goto|dest|target|return|continue)=(?:https?|\/\/)/i.test(u.search)) add('⚠️','warn','uRedir',10);
+  if (o.flag) o.r = o.r.filter(c => c.l !== tr('uNone')[0]);
+}
+const _uh0 = urlHeuristic;
+urlHeuristic = function(url) { const o = _uh0(url); try { urlExtra(url, o); } catch(e) {} return o; };
+
+/* ── Rapport, copie, VirusTotal, onglet Base ── */
+let lastReport = '';
+async function copyText(s) {
+  try { await navigator.clipboard.writeText(s); return true; } catch(e) {}
+  try { const ta = document.createElement('textarea'); ta.value = s; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok; } catch(e) { return false; }
+}
+function copyReport(btn) { copyText(lastReport).then(ok => { btn.textContent = tr(ok ? 'cpd' : 'cpf'); setTimeout(() => btn.textContent = tr('cpy'), 1800); }); }
+function buildReport(name, lv, score, r) {
+  const isF = lastScan && lastScan.type === 'file' && lastDeep, L = [`LinkGuard — ${name}`, `${tr(lv)} · ${score}/100`, ''];
+  r.forEach(c => L.push(`${c.i} ${c.l} — ${c.d}`));
+  if (isF) {
+    if (lastDeep.sha) L.push('', 'SHA-256: ' + lastDeep.sha);
+    lastDeep.findings.slice(0, 40).forEach(f => L.push(`[${f.inn ? f.inn + ' ' : ''}${f.pos}] ${RULES[f.r][LANG === 'fr' ? 2 : 4]}: ${f.s.slice(Math.max(0, f.idx-40), f.idx+f.len+40)}`));
+  }
+  lastReport = L.join('\n');
+  const vt = isF ? (lastDeep.sha ? 'https://www.virustotal.com/gui/file/' + lastDeep.sha : '') : (lastScan && lastScan.url ? 'https://www.virustotal.com/gui/search/' + encodeURIComponent(lastScan.url) : '');
+  document.getElementById('actionsRow').innerHTML = `<button class="btn btn-sm" onclick="copyReport(this)">${tr('cpy')}</button>` + (vt ? `<a class="vt" href="${vt}" target="_blank" rel="noopener noreferrer">${tr('vt')}</a>` : '') + (isF && lastDeep.sha ? `<div class="sha">SHA-256 ${lastDeep.sha}</div>` : '');
+}
+function renderDb() {
+  if (typeof document === 'undefined' || !document.getElementById('dbStats')) return;
+  const el = id => document.getElementById(id), fams = [...new Set(RULES.map(r => r[6]).filter(Boolean))];
+  const vir = DB.items.filter(i => i.t === 'file'), sites = DB.items.filter(i => i.t === 'url');
+  el('dbStats').innerHTML = [[RULES.length,'dbRules'],[fams.length,'dbFams'],[Object.keys(HASHES).length + Object.keys(DB.hashes).length,'dbHashes'],[Object.keys(HOSTS).length + Object.keys(DB.hosts).length + ABUSE.length,'dbDoms']]
+    .map(([v,k]) => `<div class="stat-cell"><div class="stat-val">${v}</div><div class="stat-key">${tr(k)}</div></div>`).join('');
+  const row = (i, site) => `<div class="hist-item"${site ? ` onclick="reuseDb(${DB.items.indexOf(i)})"` : ''}><div class="dot d-${i.sc >= 50 ? 'danger' : 'warn'}"></div><div class="hist-url">${escHtml(i.n)}${i.fam && i.fam.length ? ' · 🦠 ' + escHtml(i.fam.join(', ')) : ''}</div><span class="hist-type">×${i.seen}</span></div>`;
+  const empty = `<div class="cd">${tr('dbEmpty')}</div>`;
+  el('dbVir').innerHTML = vir.length ? vir.map(i => row(i, false)).join('') : empty;
+  el('dbSites').innerHTML = sites.length ? sites.map(i => row(i, true)).join('') : empty;
+  el('dbSig').textContent = fams.join(' · ') + ' — ' + tr('dbSigTxt');
+}
+function reuseDb(i) { const it = DB.items[i]; if (!it) return; switchTab('url'); document.getElementById('urlInput').value = it.n; updateClearBtn(); scanUrl(); }
+function dbExport() { const ta = document.getElementById('dbText'); ta.value = JSON.stringify({ v:1, items:DB.items, hashes:DB.hashes, hosts:DB.hosts }); ta.select(); copyText(ta.value); document.getElementById('dbMsg').textContent = tr('cpd'); }
+function dbImport() {
+  let n; try { n = dbImportText(document.getElementById('dbText').value); } catch(e) { n = -2; }
+  document.getElementById('dbMsg').textContent = n === -2 ? tr('dbBad') : n === -1 ? tr('dbFull') : t('dbOk', n); renderDb();
+}
+let dbArm = 0;
+function dbClear(btn) {
+  if (!dbArm) { dbArm = setTimeout(() => { dbArm = 0; btn.textContent = tr('dbClr'); }, 3000); btn.textContent = tr('dbClr2'); return; }
+  clearTimeout(dbArm); dbArm = 0; btn.textContent = tr('dbClr'); DB.items = []; DB.hashes = {}; DB.hosts = {}; JR = null; dbSave(); renderDb();
+}
+Object.assign(T.fr, {
+tabDb:`🗄️ Base`, dbVir:`🦠 MENACES DÉTECTÉES`, dbSites:`🌐 SITES DÉTECTÉS`, dbSig:`📚 SIGNATURES INTÉGRÉES`, dbIO:`📥 IMPORT / EXPORT`,
+dbEmpty:`Rien pour l'instant : les fichiers et sites jugés suspects ou dangereux seront mémorisés ici (sur cet appareil uniquement).`,
+dbRules:`Règles`, dbFams:`Familles`, dbHashes:`Empreintes`, dbDoms:`Domaines`, dbExp:`📤 Exporter`, dbImp:`📥 Importer`, dbClr:`🗑️ Vider`, dbClr2:`⚠️ Confirmer ?`,
+dbPh:`Colle ici des empreintes SHA-256 ou des domaines (un par ligne, ex. listes d'abuse.ch), ou un export JSON…`,
+dbOk:`{0} entrées importées.`, dbBad:`Format non reconnu.`, dbFull:`Stockage plein : liste trop grande pour cet appareil.`,
+dbSigTxt:`Ajoute tes propres empreintes et domaines avec l'import ci-dessous.`,
+cpy:`📋 Copier le rapport`, cpd:`✅ Copié`, cpf:`❌ Copie impossible`, vt:`🔎 Vérifier sur VirusTotal`,
+safe:`Aucun signal détecté`,
+fHash:[`Empreinte connue`,`Le SHA-256 du fichier figure dans la base de menaces : {0}.`],
+fFam:[`Famille de menace reconnue`,`Correspond à des signatures de : {0}.`],
+fSeen:[`Déjà détecté`,`Vu {0} fois ; première détection le {1}. Mémorisé dans la base locale.`],
+fCover:[`Limites de l'analyse`,`Aucun signal ne prouve qu'un fichier est sain : une menace récente ou bien camouflée peut passer. Pour un fichier important, vérifie son empreinte sur VirusTotal.`],
+uBad:[`Site connu comme malveillant`,`{0}`],
+uAbuse:[`Hébergement jetable ({0})`,`Service gratuit de nom de domaine ou de tunnel, très utilisé pour héberger du phishing et des malwares.`],
+uTypo:[`Imitation de marque ({1})`,`« {0} » ressemble au nom d'une marque connue sans être son vrai site : typosquatting classique.`],
+uBrandSub:[`Marque dans le sous-domaine ({0})`,`Le nom de la marque est placé devant un domaine qui n'est pas le sien pour tromper l'œil.`],
+uPort:[`Port inhabituel (:{0})`,`Les sites légitimes utilisent presque toujours le port standard.`],
+uRedir:[`Paramètre de redirection`,`Le lien renvoie vers une autre adresse : technique courante pour masquer la vraie destination.`]
+});
+Object.assign(T.en, {
+tabDb:`🗄️ Database`, dbVir:`🦠 DETECTED THREATS`, dbSites:`🌐 DETECTED SITES`, dbSig:`📚 BUILT-IN SIGNATURES`, dbIO:`📥 IMPORT / EXPORT`,
+dbEmpty:`Nothing yet: files and sites judged suspicious or dangerous will be remembered here (on this device only).`,
+dbRules:`Rules`, dbFams:`Families`, dbHashes:`Hashes`, dbDoms:`Domains`, dbExp:`📤 Export`, dbImp:`📥 Import`, dbClr:`🗑️ Clear`, dbClr2:`⚠️ Confirm?`,
+dbPh:`Paste SHA-256 hashes or domains here (one per line, e.g. abuse.ch lists), or a JSON export…`,
+dbOk:`{0} entries imported.`, dbBad:`Format not recognized.`, dbFull:`Storage full: list too large for this device.`,
+dbSigTxt:`Add your own hashes and domains with the import below.`,
+cpy:`📋 Copy report`, cpd:`✅ Copied`, cpf:`❌ Copy failed`, vt:`🔎 Check on VirusTotal`,
+safe:`No warning signs`,
+fHash:[`Known fingerprint`,`The file's SHA-256 is in the threat database: {0}.`],
+fFam:[`Threat family recognized`,`Matches signatures of: {0}.`],
+fSeen:[`Already detected`,`Seen {0} times; first detected on {1}. Remembered in the local database.`],
+fCover:[`Limits of the analysis`,`No signal proves a file is clean: a recent or well-camouflaged threat can slip through. For an important file, check its fingerprint on VirusTotal.`],
+uBad:[`Known malicious site`,`{0}`],
+uAbuse:[`Disposable hosting ({0})`,`Free domain or tunnel service, widely used to host phishing and malware.`],
+uTypo:[`Brand lookalike ({1})`,`"{0}" resembles a well-known brand name without being its real site: classic typosquatting.`],
+uBrandSub:[`Brand in subdomain ({0})`,`The brand name is placed in front of a domain that isn't theirs to fool the eye.`],
+uPort:[`Unusual port (:{0})`,`Legitimate sites almost always use the standard port.`],
+uRedir:[`Redirect parameter`,`The link forwards to another address: a common way to hide the real destination.`]
+});
+Object.assign(T.es, { safe:`Sin señales de alerta` }); Object.assign(T.pt, { safe:`Nenhum sinal de alerta` }); Object.assign(T.de, { safe:`Keine Warnsignale` });
+Object.assign(T.it, { safe:`Nessun segnale di allarme` }); Object.assign(T.ru, { safe:`Признаков угрозы не найдено` }); Object.assign(T.ar, { safe:`لا توجد علامات تحذير` });
+Object.assign(T.zh, { safe:`未发现警告信号` }); Object.assign(T.ja, { safe:`警告サインなし` });
+
+/* ═══════════════ RENDER RESULT ═══════════════ */
+const icons = { safe:'✅', warn:'⚠️', danger:'🚨' };
+const glowClass = { safe:'glow-safe', warn:'glow-warn', danger:'glow-danger' };
+
+function level(score) { return score>=50?'danger':score>=20?'warn':'safe'; }
+
+let lastScan = null;   // pour re-traduire le résultat quand on change de langue
+
+function renderResult(displayName, { r, score }, statsHtml, codeHtml, keepAI) {
+  const lv = level(score);
+  const resultEl = document.getElementById('result');
+  if (!keepAI) { resultEl.classList.remove('show'); void resultEl.offsetWidth; resultEl.classList.add('show'); }
+  document.getElementById('scannedUrl').textContent = displayName;
+  document.getElementById('verdictIcon').textContent = icons[lv];
+  const vl = document.getElementById('verdictLabel');
+  vl.textContent = tr(lv); vl.className = 'verdict-label v-'+lv;
+  document.getElementById('verdictTip').textContent = tr('tip'+lv);
+  const vh = document.getElementById('verdictHero');
+  vh.className = 'verdict-hero '+glowClass[lv];
+  document.getElementById('scoreNum').textContent = score+' / 100';
+  document.getElementById('fileStatsRow').innerHTML = statsHtml || '';
+  const bar = document.getElementById('barFill');
+  bar.className='bar-fill f-'+lv;
+  if (keepAI) bar.style.width = score+'%';
+  else { bar.style.width='0%'; setTimeout(()=>{ bar.style.width=score+'%'; },50); }
+  document.getElementById('checks').innerHTML = r.map((c,i)=>`
+    <div class="check" style="animation-delay:${keepAI?0:i*60}ms">
+      <span class="ci">${c.i}</span>
+      <div class="ct"><div class="cl">${c.l}</div><div class="cd">${c.d}</div></div>
+    </div>`).join('');
+  document.getElementById('codePreviewBlock').innerHTML = codeHtml || '';
+  buildReport(displayName, lv, score, r);
+  if (!keepAI) {
+    document.getElementById('aiBody').innerHTML = `<div class="spin-row"><div class="spinner"></div>${tr('aiLoad')}</div>`;
+    resultEl.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
+
+function fileView() {
+  const res = fileHeuristic(currentFile, lastDeep ? null : currentFileContent);
+  if (lastDeep) deepMerge(res);
+  const statsHtml = `<div class="file-stats">
+    <div class="stat-cell"><div class="stat-val">.${currentFile.name.split('.').pop().toUpperCase()}</div><div class="stat-key">${tr('ext')}</div></div>
+    <div class="stat-cell"><div class="stat-val">${formatBytes(currentFile.size)}</div><div class="stat-key">${tr('size')}</div></div>
+    <div class="stat-cell"><div class="stat-val">${currentFileContent ? tr('yes') : tr('no')}</div><div class="stat-key">${tr('read')}</div></div>
+  </div>`;
+  let codeHtml = lastDeep ? deepHtml() : '';
+  if (!lastDeep && currentFileContent) {
+    const preview = currentFileContent.slice(0, 400).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    codeHtml = `<div class="code-preview"><div class="code-head">${tr('prev')}</div><div class="code-block">${preview}${currentFileContent.length>400?'\n…':''}
+</div></div>`;
+  }
+  return { res, statsHtml, codeHtml };
+}
+
+function rerenderResult() {
+  if (!lastScan || !document.getElementById('result').classList.contains('show')) return;
+  if (lastScan.type === 'url') {
+    renderResult(lastScan.url, urlHeuristic(lastScan.url), '', '', true);
+  } else if (currentFile) {
+    const v = fileView();
+    renderResult(currentFile.name, v.res, v.statsHtml, v.codeHtml, true);
+  }
+}
+
+/* ═══════════════ HISTORY ═══════════════ */
+function escHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function clearHistory() {
+  hist.length = 0;
+  renderHistory();
+}
+function reuseHistory(i) {
+  const h = hist[i];
+  if (!h || h.type !== 'url') return;
+  switchTab('url');
+  document.getElementById('urlInput').value = h.url;
+  updateClearBtn();
+  scanUrl();
+}
+
+/* ═══════════════ CLEAR (✕) ═══════════════ */
+function updateClearBtn() {
+  const v = document.getElementById('urlInput').value;
+  document.getElementById('clearUrl').classList.toggle('show', v.length > 0);
+}
+function clearUrl() {
+  const inp = document.getElementById('urlInput');
+  inp.value = '';
+  updateClearBtn();
+  if (lastScan && lastScan.type === 'url') {
+    document.getElementById('result').classList.remove('show');
+    lastScan = null;
+  }
+  inp.focus();
+}
+function addHistory(label, lv, type) {
+  hist.unshift({url:label, lv, type});
+  if (hist.length>7) hist.pop();
+  renderHistory();
+}
+function renderHistory() {
+  const hs = document.getElementById('histSection');
+  const hl = document.getElementById('histList');
+  if (!hist.length) { hs.style.display='none'; return; }
+  hs.style.display='block';
+  hl.innerHTML = hist.map((h,i)=>`
+    <div class="hist-item" onclick="reuseHistory(${i})">
+      <div class="dot d-${h.lv}"></div>
+      <div class="hist-url">${escHtml(h.url)}</div>
+      <span class="hist-type">${h.type==='url' ? tr('tURL') : tr('tFile')}</span>
+    </div>`).join('');
+}
+
+/* ═══════════════ SCAN URL ═══════════════ */
+async function scanUrl() {
+  JR = null;
+  let raw = document.getElementById('urlInput').value.trim();
+  if (!raw) return;
+  let url = raw;
+  if (!/^https?:\/\//i.test(url)) url = 'https://'+url;
+  const btn = document.getElementById('scanBtn');
+  if (btn.disabled) return;
+  btn.disabled=true; btn.textContent='⏳';
+  const { r, score } = urlHeuristic(url);
+  lastScan = { type:'url', url };
+  renderResult(url, {r,score}, '', '');
+  try { document.getElementById('aiBody').textContent = await getUrlAI(url); }
+  catch(e) { document.getElementById('aiBody').textContent = tr('aiNo'); }
+  finally { btn.disabled=false; btn.textContent=tr('scan'); }
+  addHistory(url, level(score), 'url'); dbRecord('url', url, score);
+}
+
+/* ═══════════════ SCAN FILE ═══════════════ */
+async function scanFile() {
+  if (!currentFile) return;
+  JR = null;
+  const btn = document.getElementById('scanFileBtn');
+  if (btn.disabled) return;
+  btn.disabled=true; btn.textContent='⏳';
+  lastScan = { type:'file' };
+  try { lastDeep = await deepScan(currentFile); } catch(e) { lastDeep = null; }
+  const v = fileView();
+  renderResult(currentFile.name, v.res, v.statsHtml, v.codeHtml);
+  try { document.getElementById('aiBody').textContent = await getFileAI(currentFile, currentFileContent); }
+  catch(e) { document.getElementById('aiBody').textContent = tr('aiNo'); }
+  finally { btn.disabled=false; btn.textContent=tr('analyze'); }
+  addHistory(currentFile.name, level(v.res.score), 'file'); dbRecord('file', currentFile.name, v.res.score, lastDeep);
+}
+
+document.getElementById('urlInput').addEventListener('keydown', e => { if(e.key==='Enter') scanUrl(); if(e.key==='Escape') clearUrl(); });
+document.getElementById('urlInput').addEventListener('input', updateClearBtn);
+
+/* ═══════════════ INIT LANGUE ═══════════════ */
+buildLangSelector();
+LANG = pickInitialLang();
+document.getElementById('langSel').value = LANG;
+document.getElementById('langSel').addEventListener('change', e => setLang(e.target.value));
+applyLang();
+</script>
+
+</body>
+</html>
